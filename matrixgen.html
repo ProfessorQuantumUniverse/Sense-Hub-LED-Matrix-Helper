@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pixel Matrix</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.11/paper-full.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@jaames/iro"></script>
+  <style>
+    html,
+    body {
+      margin: 20px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      text-align: center;
+    }
+
+    #cv {
+      border: 3px solid blue;
+      margin: 20px 0;
+    }
+
+    .button-container {
+      margin: 20px 0;
+    }
+
+    .matrix {
+      white-space: pre;
+      font-family: monospace;
+      margin-top: 20px;
+    }
+
+    form {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div>
+    <div id="color-picker"></div>
+    <form action="javascript:void(0)">
+      <input type="text" id="color-input">
+      <button id="color-input-ok" type="submit">OK</button>
+    </form>
+    <div class="button-container">
+      <label for="changeforall">Change color for all colored pixels</label>
+      <input type="checkbox" id="changeforall">
+      <button id="done">Done!</button>
+      <button id="reset">Reset</button>
+      <button id="blackify">Set all white pixels black</button>
+    </div>
+    <canvas id="cv" height="250px" width="250px"></canvas>
+  </div>
+  <div id="matrix" class="matrix"></div>
+
+  <script>
+    const canvas = document.getElementById("cv");
+    const btn = document.querySelector("#done");
+    const reset = document.querySelector("#reset");
+    const changeAllInput = document.querySelector("#changeforall");
+    const colorInput = document.querySelector("#color-input");
+    const colorInputButton = document.querySelector("#color-input-ok");
+    const blButton = document.getElementById("blackify");
+    const matrixDiv = document.getElementById("matrix");
+    let currColor = 'white';
+
+    paper.setup(canvas);
+    paper.install(window);
+
+    let isMouseDown = false;
+    let isLeftClick = true;
+
+    paper.view.onMouseDown = e => {
+      isLeftClick = e.event.button === 0;
+      isMouseDown = true;
+    };
+
+    paper.view.onMouseUp = () => {
+      isMouseDown = false;
+    };
+
+    const paths = [];
+    const gridSize = 8;
+    const cellSize = 30;
+
+    function createRectangle(x, y, xsize, ysize, color) {
+      const rect = new Rectangle([x, y], [xsize, ysize]);
+      const path = new Path.Rectangle(rect);
+      path.fillColor = color;
+      path.strokeColor = 'black';
+      path.strokeWidth = 1;
+      path.onClick = function (event) {
+        path.fillColor = event.event.button === 0 ? currColor : 'white';
+      };
+      path.onMouseMove = (e) => {
+        if (isMouseDown) {
+          path.fillColor = isLeftClick ? currColor : 'white';
+        }
+      };
+      return path;
+    }
+
+    for (let i = 0; i < gridSize; i++) {
+      for (let j = 0; j < gridSize; j++) {
+        paths.push({
+          x: i,
+          y: j,
+          pixel: createRectangle(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1, 'white')
+        });
+      }
+    }
+
+    btn.onclick = () => {
+      let colorsUsed = {};
+      let charCode = 97;
+
+      paths.forEach(p => {
+        let color = p.pixel.fillColor._canvasStyle;
+        if (!colorsUsed[color]) {
+          let label = String.fromCharCode(charCode);
+          colorsUsed[color] = label;
+          charCode++;
+        }
+      });
+
+      let matrixOutput = Object.entries(colorsUsed)
+        .map(([color, label]) => `${label} = (${color.replace(/rgb\(|\)/g, '')})`)
+        .join("\n") + "\n\n";
+
+      paths.sort((a, b) => a.y - b.y || a.x - b.x);
+      for (let i = 0; i < gridSize; i++) {
+        let row = paths.slice(i * gridSize, (i + 1) * gridSize).map(p => colorsUsed[p.pixel.fillColor._canvasStyle] || 'w').join(", ");
+        matrixOutput += row + ",\n";
+      }
+      matrixDiv.textContent = matrixOutput;
+    };
+
+    reset.onclick = () => {
+      paths.forEach(p => p.pixel.fillColor = 'white');
+      colorPicker.color.hexString = '#ffffff';
+    };
+
+    const colorPicker = new iro.ColorPicker('#color-picker');
+    colorPicker.on('color:change', color => {
+      currColor = color.hexString;
+      if (changeAllInput.checked) {
+        paths.filter(p => p.pixel.fillColor._canvasStyle !== 'rgb(255,255,255)')
+          .forEach(p => p.pixel.fillColor = currColor);
+      }
+      colorInput.value = currColor;
+    });
+
+    colorInputButton.onclick = () => {
+      colorPicker.color.hexString = colorInput.value;
+    };
+
+    blButton.onclick = () => {
+      paths.filter(p => p.pixel.fillColor._canvasStyle === 'rgb(255,255,255)')
+        .forEach(p => p.pixel.fillColor = 'black');
+    };
+  </script>
+</body>
+
+</html>

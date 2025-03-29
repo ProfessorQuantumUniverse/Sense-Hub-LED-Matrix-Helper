@@ -327,7 +327,7 @@
         // --- Hauptfunktionen ---
 
         // Grid erstellen / neu erstellen
-        function createGrid() {
+                function createGrid() {
             console.log("Attempting to create grid...");
             try {
                 // Altes Projekt bereinigen
@@ -341,18 +341,41 @@
                 paperScope.setup(canvas);
                 console.log("paperScope setup complete on canvas.");
 
-                // Wichtige Farben initialisieren *nach* setup
-                whiteColor = new paperScope.Color('white');
-                blackColor = new paperScope.Color('black');
-                // Startfarbe setzen (explizit weiß) und UI synchronisieren
-                currColor = whiteColor.clone(); // Sicherstellen, dass es ein Klon ist
-                colorPickerInstance.color.hexString = currColor.toHex();
-                inputColorHex.value = currColor.toHex();
-                console.log("Initialized base colors (white, black) and set current color to white.");
+                // Wichtige Farben und aktuelle Farbe initialisieren
+                try {
+                    whiteColor = new paperScope.Color('white');
+                    blackColor = new paperScope.Color('black');
 
-                // Grid-Parameter holen
-                paths = []; // Array leeren
-                gridSize = parseInt(inputGridSize.value, 10) || 8; // Basis 10 und Fallback
+                    // Prüfen, ob whiteColor korrekt initialisiert wurde
+                    if (!whiteColor || typeof whiteColor.clone !== 'function') {
+                        throw new Error("Failed to initialize whiteColor as a valid paper.Color object.");
+                    }
+                    console.log("Initialized whiteColor OK:", whiteColor.toString()); // toString() ist sicherer falls toCSS fehlt
+
+                    // currColor initialisieren und prüfen
+                    currColor = whiteColor.clone();
+                    if (!currColor || typeof currColor.toHex !== 'function') {
+                        // Wenn wir hier landen, ist das Klonen oder die Basis (whiteColor) fehlerhaft
+                        console.error("currColor after clone is invalid:", currColor);
+                        throw new Error(`Failed to initialize currColor from whiteColor.clone(). typeof currColor: ${typeof currColor}`);
+                    }
+                    console.log("Initialized currColor OK:", currColor.toString());
+
+                    // UI synchronisieren (Picker und Input)
+                    colorPickerInstance.color.hexString = currColor.toHex(); // Sollte jetzt gehen
+                    inputColorHex.value = currColor.toHex();             // Sollte jetzt gehen
+                    console.log("Synced UI with initial currColor.");
+
+                } catch (colorError) {
+                    console.error("FATAL ERROR during color initialization:", colorError);
+                    alert("Failed to initialize colors. Check console. Error: " + colorError.message);
+                    // Wir werfen den Fehler weiter, um createGrid abzubrechen
+                    throw colorError;
+                }
+
+                // Grid-Parameter holen (Rest der Funktion bleibt gleich)
+                paths = [];
+                gridSize = parseInt(inputGridSize.value, 10) || 8;
                 cellSize = parseInt(inputCellSize.value, 10) || 30;
                 const totalSize = gridSize * cellSize;
                 if (totalSize <= 0) {
@@ -371,46 +394,34 @@
                         const rect = new paperScope.Rectangle(i * cellSize, j * cellSize, cellSize, cellSize);
                         const path = new paperScope.Path.Rectangle(rect);
 
-                        path.fillColor = null; // Start transparent
-                        path.strokeColor = strokeColor ? strokeColor.clone() : null; // Klon oder null
+                        path.fillColor = null;
+                        path.strokeColor = strokeColor ? strokeColor.clone() : null;
                         path.strokeWidth = 1;
                         path.gridX = i;
                         path.gridY = j;
 
-                        // Event Listeners für diesen Pfad
+                        // Event Listeners
                         path.onMouseDown = function(event) {
                             event.preventDefault();
                             isMouseDown = true;
-                            handlePixelClick(this, event); // 'this' ist der geklickte Path
+                            handlePixelClick(this, event);
                         };
                         path.onMouseEnter = function(event) {
                             if (isMouseDown) {
-                                handlePixelClick(this, event, true); // 'this' ist der Path
+                                handlePixelClick(this, event, true);
                             }
                         };
 
-                        // Pfad speichern (Index = x * gridSize + y)
+                        // Pfad speichern
                         paths[i * gridSize + j] = { x: i, y: j, pixel: path };
                     }
                 }
                 console.log(`Created ${paths.length} paths.`);
 
-                // Globale Maus-Events für den View
-                paperScope.view.onMouseUp = () => {
-                    if (isMouseDown) {
-                        isMouseDown = false;
-                        lastPaintedCoords = { x: -1, y: -1 };
-                    }
-                };
-                paperScope.view.onMouseLeave = () => {
-                     if (isMouseDown) {
-                         isMouseDown = false;
-                         lastPaintedCoords = { x: -1, y: -1 };
-                     }
-                 };
-
-                // Kontextmenü verhindern
-                canvas.removeEventListener('contextmenu', preventContextMenu); // Erst entfernen, falls schon vorhanden
+                // Globale Maus-Events
+                paperScope.view.onMouseUp = () => { /* ... */ };
+                paperScope.view.onMouseLeave = () => { /* ... */ };
+                canvas.removeEventListener('contextmenu', preventContextMenu);
                 canvas.addEventListener('contextmenu', preventContextMenu);
 
                 // Alles zeichnen
@@ -418,12 +429,17 @@
                 console.log("Grid creation complete. Initial draw performed.");
 
             } catch (error) {
-                console.error("FATAL ERROR during createGrid:", error);
-                alert("Failed to create grid. Check console for details. Error: " + error.message);
-                // Hier könnten wir versuchen, die UI zu deaktivieren oder eine Meldung anzuzeigen
+                // Fängt Fehler aus dem Hauptteil von createGrid oder weitergeworfene Fehler (z.B. Farbinit)
+                console.error("FATAL ERROR during createGrid execution:", error);
+                // Verhindere weitere Ausführung, wenn das Grid nicht erstellt werden konnte
+                // Optional: Zeige eine Fehlermeldung im UI an
+                matrixDiv.textContent = "Error creating grid. See console.";
+                // Deaktiviere Buttons o.ä., falls sinnvoll
             }
         }
 
+        // Der Rest des Codes (handlePixelClick, floodFill, generateMatrix, Event Listener etc.)
+        // bleibt wie in der vorherigen Antwort. Nur die createGrid Funktion wird ersetzt.
         // Hilfsfunktion, um Kontextmenü zu verhindern
         function preventContextMenu(e) {
             e.preventDefault();

@@ -367,24 +367,34 @@
                 console.log("paperScope setup complete on canvas.");
 
                 // Farben initialisieren
-                 try {
+                try { // Innerer try-catch Block für Farben
                     whiteColor = new paperScope.Color('white');
                     blackColor = new paperScope.Color('black');
-                    if (!whiteColor || typeof whiteColor.clone !== 'function') throw new Error("Failed to init whiteColor");
+                    if (!whiteColor || typeof whiteColor.toHex !== 'function') { // Prüfe toHex auf whiteColor
+                        throw new Error("Failed to init whiteColor as a valid paper.Color object.");
+                    }
                     console.log("Initialized whiteColor OK:", whiteColor.toString());
 
-                    currColor = whiteColor.clone(); // Startfarbe ist weiß
-                    if (!currColor || typeof currColor.toHex !== 'function') throw new Error("Failed to init currColor");
-                    console.log("Initialized currColor OK:", currColor.toString());
+                    // === Workaround: Initialisiere currColor direkt ===
+                    currColor = new paperScope.Color('white');
+                    // === Ende Workaround ===
 
-                    // UI synchronisieren - HIER WAR DER VERMUTETE FEHLERORT, sollte jetzt sicher sein
+                    // Prüfe das neu erstellte currColor
+                    if (!currColor || typeof currColor.toHex !== 'function') {
+                        console.error("currColor after direct initialization is invalid:", currColor);
+                        // Wenn das *immer noch* fehlschlägt, liegt das Problem tiefer bei paperScope.Color('white')
+                        throw new Error(`Failed to init currColor directly. typeof currColor: ${typeof currColor}`);
+                    }
+                    console.log("Initialized currColor OK (directly):", currColor.toString());
+
+                    // UI synchronisieren
                     colorPickerInstance.color.hexString = currColor.toHex();
                     inputColorHex.value = currColor.toHex();
                     console.log("Synced UI with initial currColor.");
 
                 } catch (colorError) {
                     console.error("FATAL ERROR during color initialization:", colorError);
-                    throw colorError; // Fehler weiterwerfen, um createGrid abzubrechen
+                    throw colorError;
                 }
 
                 // Grid-Parameter holen & Canvas Größe setzen

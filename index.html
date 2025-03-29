@@ -266,6 +266,7 @@
         console.log("DOM Loaded. Initializing Pixel Editor...");
 
         // --- Elemente holen ---
+        // (Bleibt gleich)
         const canvas = document.getElementById("cv");
         const matrixDiv = document.getElementById("matrix");
         const btnGenerateMatrix = document.getElementById("done");
@@ -285,65 +286,65 @@
         const currentToolDisplay = document.getElementById('current-tool-display');
         const colorPickerContainer = document.getElementById('color-picker');
 
+
         // --- Globale Zustandsvariablen ---
-        let paperScope;
+        // let paperScope; // <-- Entfernen oder auskommentieren
         let paths = [];
         let gridSize = 8;
         let cellSize = 30;
-        let currColor; // Initialisiert in createGrid
+        let currColor; // Wird in createGrid initialisiert
         let isMouseDown = false;
         let lastPaintedCoords = { x: -1, y: -1 };
         let showGridLines = true;
         let currentTool = 'draw';
-        let whiteColor; // Initialisiert in createGrid
-        let blackColor; // Initialisiert in createGrid
-        const TRANSPARENT_KEY = '__TRANSPARENT__';
-        let isPaperReady = false; // <<< NEUE Variable zur Steuerung
+        let whiteColor; // Wird in createGrid initialisiert
+        let blackColor; // Wird in createGrid initialisiert
+        const TRANSPARENT_KEY = '__TRANSPARENT__'; // Behalten für Matrix-Logik
+        let isPaperReady = false;
 
         // --- Color Picker Initialisierung (iro.js) ---
         let colorPickerInstance;
         try {
-             colorPickerInstance = new iro.ColorPicker(colorPickerContainer, {
+            colorPickerInstance = new iro.ColorPicker(colorPickerContainer, {
                 width: 200, color: "#ffffff", borderWidth: 1, borderColor: "#ccc",
-                layout: [ { component: iro.ui.Wheel }, { component: iro.ui.Box },
-                          { component: iro.ui.Slider, options: { sliderType: 'hue' } },
-                          { component: iro.ui.Slider, options: { sliderType: 'saturation' } },
-                          { component: iro.ui.Slider, options: { sliderType: 'value' } }, ]
+                layout: [ /* ... Layout bleibt gleich ... */
+                    { component: iro.ui.Wheel }, { component: iro.ui.Box },
+                    { component: iro.ui.Slider, options: { sliderType: 'hue' } },
+                    { component: iro.ui.Slider, options: { sliderType: 'saturation' } },
+                    { component: iro.ui.Slider, options: { sliderType: 'value' } },
+                 ]
             });
             console.log("iro.js Color Picker initialized.");
 
-             // --- Event Listener für Color Picker ---
-             // WICHTIG: Wird HIER definiert, aber der Code darin prüft auf isPaperReady
-             colorPickerInstance.on('color:change', (color) => {
-                // *** NEUE PRÜFUNG: Nur ausführen, wenn Paper.js bereit ist ***
-                if (!isPaperReady || !paperScope || !currColor || !whiteColor) {
+            // --- Event Listener für Color Picker ---
+            colorPickerInstance.on('color:change', (color) => {
+                if (!isPaperReady || !currColor || !whiteColor) { // Prüfung beibehalten
                     console.log("Color Picker change event ignored - Paper.js not ready yet.");
                     return;
                 }
-
                 try {
-                     const newColor = new paperScope.Color(color.hexString);
+                    // Verwende den globalen Color-Konstruktor
+                    const newColor = new Color(color.hexString); // <-- Kein paper. Präfix
 
-                     if (!currColor.equals(newColor)) {
-                         // console.log("Picker changed color to:", newColor.toCSS());
-                         currColor = newColor; // Globale Variable aktualisieren
-                         inputColorHex.value = currColor.toHex(); // UI aktualisieren
+                    if (!currColor.equals(newColor)) {
+                        currColor = newColor;
+                        inputColorHex.value = currColor.toHex();
 
-                         // "Change for all" Logik
-                         if (inputChangeAll.checked && paths.length > 0) {
-                             paths.forEach(p => {
-                                 if (p && p.pixel && p.pixel.fillColor && !p.pixel.fillColor.equals(whiteColor)) {
-                                      p.pixel.fillColor = currColor.clone();
-                                 }
-                              });
-                              paperScope.view.draw(); // Neuzeichnen
-                         }
-                     }
-                 } catch (error) {
-                     console.error("Error in color:change handler:", error);
-                 }
-             });
-             console.log("Color Picker 'color:change' listener attached.");
+                        if (inputChangeAll.checked && paths.length > 0) {
+                            paths.forEach(p => {
+                                // Vergleich mit Color-Objekt beibehalten
+                                if (p && p.pixel && p.pixel.fillColor && !p.pixel.fillColor.equals(whiteColor)) {
+                                    p.pixel.fillColor = currColor.clone();
+                                }
+                            });
+                            view.draw(); // <-- Kein paper. Präfix
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error in color:change handler:", error);
+                }
+            });
+            console.log("Color Picker 'color:change' listener attached.");
 
         } catch (error) {
             console.error("FATAL: Failed to initialize iro.js Color Picker!", error);
@@ -355,74 +356,59 @@
 
         function createGrid() {
             console.log("Attempting to create grid...");
-            isPaperReady = false; // Zurücksetzen, falls Grid neu erstellt wird
+            isPaperReady = false;
             try {
-                if (paperScope && paperScope.project) {
-                    paperScope.project.clear();
+                // Auf globales paper.project prüfen, dann globales project verwenden
+                if (paper.project) { // Initial prüfen wir auf paper.project
+                    project.clear(); // Dann verwenden wir den globalen project
                     console.log("Cleared previous paper project.");
                 }
 
-                paperScope = new paper.PaperScope();
-                paperScope.setup(canvas);
-                console.log("paperScope setup complete on canvas.");
+                paper.setup(canvas); // <-- Wichtig: Initialisiert das globale paper Objekt für diesen Canvas
+                console.log("paper.setup complete on canvas.");
+                paper.install(window); // <-- WICHTIG: Installiert Paper.js im globalen Scope
+                console.log("paper.install(window) executed.");
 
-                // Farben initialisieren
-                                // Farben initialisieren mit erweitertem Debugging
+
+                // Farben initialisieren (jetzt mit globalem Color)
                 try {
-                    console.log("Attempting to initialize colors...");
-                    console.log("paperScope object:", paperScope);
-                    console.log("Is paperScope.Color a function?", typeof paperScope.Color);
-
-                    if (typeof paperScope.Color !== 'function') {
-                        throw new Error("paperScope.Color is not available or not a function!");
+                    console.log("Attempting to initialize colors using global constructors...");
+                    // Prüfen ob Color jetzt global verfügbar ist
+                    console.log("Is Color constructor available globally?", typeof Color);
+                    if (typeof Color !== 'function') {
+                         throw new Error("Global Color constructor is not available after paper.install!");
                     }
 
-                    console.log("Attempting to create whiteColor...");
-                    whiteColor = new paperScope.Color('white');
-                     console.log("whiteColor created:", whiteColor, "Type:", typeof whiteColor);
-                    if (!whiteColor || typeof whiteColor.toHex !== 'function') {
-                        console.error("Failed to create a valid whiteColor object. Value:", whiteColor);
-                        throw new Error("Failed to init whiteColor as a valid paper.Color object.");
-                    }
-                    console.log("Initialized whiteColor OK:", whiteColor.toString());
+                    whiteColor = new Color('white'); // <-- Kein paper. Präfix
+                    blackColor = new Color('black'); // <-- Kein paper. Präfix
+                    console.log("Initialized whiteColor:", whiteColor?.toString(), "blackColor:", blackColor?.toString());
 
-                    console.log("Attempting to create blackColor...");
-                    blackColor = new paperScope.Color('black');
-                    console.log("blackColor created:", blackColor, "Type:", typeof blackColor);
-                     if (!blackColor || typeof blackColor.toHex !== 'function') {
-                        console.warn("Failed to create a valid blackColor object. Value:", blackColor);
-                        // Optional: Hier auch einen Error werfen, wenn Schwarz kritisch ist
-                    } else {
-                        console.log("Initialized blackColor OK:", blackColor.toString());
-                    }
+                    // Prüfen ob whiteColor gültig ist
+                     if (!whiteColor || typeof whiteColor.toHex !== 'function') {
+                        throw new Error("Failed to init whiteColor as a valid Color object.");
+                     }
 
+                    currColor = whiteColor.clone(); // Start mit Weiß
+                    console.log("Initialized currColor:", currColor?.toString());
 
-                    console.log("Attempting to create currColor with 'white'...");
-                    currColor = new paperScope.Color('white');
-                    console.log("currColor created:", currColor, "Type:", typeof currColor);
-
-                    // Prüfe das neu erstellte currColor
+                     // Prüfen ob currColor gültig ist
                     if (!currColor || typeof currColor.toHex !== 'function') {
-                        console.error("currColor after direct initialization is invalid. Value:", currColor);
-                        // Der Fehler tritt wahrscheinlich hier auf, wenn currColor kein gültiges Objekt ist.
-                        throw new Error(`Failed to init currColor directly. typeof currColor: ${typeof currColor}, value: ${currColor}`);
+                        throw new Error("Failed to init currColor as a valid Color object.");
                     }
-                    console.log("Initialized currColor OK (directly):", currColor.toString());
 
-                    // UI synchronisieren (nur wenn iro.js Instanz existiert)
+                    // UI synchronisieren
                     if (colorPickerInstance) {
-                         console.log("Attempting to sync UI color...");
-                         colorPickerInstance.color.hexString = currColor.toHex();
-                         inputColorHex.value = currColor.toHex();
-                         console.log("Synced UI with initial currColor.");
+                        colorPickerInstance.color.hexString = currColor.toHex();
+                        inputColorHex.value = currColor.toHex();
+                        console.log("Synced UI with initial currColor.");
                     } else {
-                         console.warn("colorPickerInstance not found for UI sync during color init.");
+                         console.warn("colorPickerInstance not available for sync.");
                     }
+
 
                 } catch (colorError) {
-                    console.error("FATAL ERROR during color initialization:", colorError.message, colorError.stack); // Logge mehr Details
-                    // Den Fehler weiterwerfen, damit die äußere Routine ihn fängt
-                    throw colorError;
+                    console.error("FATAL ERROR during color initialization:", colorError);
+                    throw colorError; // Weiterwerfen für äußeren Catch
                 }
 
                 // Grid-Parameter holen & Canvas Größe setzen
@@ -433,35 +419,42 @@
                 if (totalSize <= 0) throw new Error(`Invalid grid dimensions: Size=${gridSize}, Cell=${cellSize}`);
                 canvas.width = totalSize;
                 canvas.height = totalSize;
-                paperScope.view.viewSize = new paperScope.Size(totalSize, totalSize);
+                // Globales view und Size verwenden
+                view.viewSize = new Size(totalSize, totalSize); // <-- Kein paper. Präfix
                 console.log(`Grid dimensions set: ${gridSize}x${gridSize}, Cell: ${cellSize}px`);
 
-                // Pfade erstellen
+                // Pfade erstellen (mit globalen Konstruktoren)
                 const strokeColor = showGridLines ? blackColor : null;
-                for (let i = 0; i < gridSize; i++) { for (let j = 0; j < gridSize; j++) {
-                        const rect = new paperScope.Rectangle(i * cellSize, j * cellSize, cellSize, cellSize);
-                        const path = new paperScope.Path.Rectangle(rect);
-                        path.fillColor = null; path.strokeColor = strokeColor ? strokeColor.clone() : null; path.strokeWidth = 1;
-                        path.gridX = i; path.gridY = j;
+                for (let i = 0; i < gridSize; i++) {
+                    for (let j = 0; j < gridSize; j++) {
+                        const rect = new Rectangle(i * cellSize, j * cellSize, cellSize, cellSize); // <-- Kein paper. Präfix
+                        const path = new Path.Rectangle(rect); // <-- Kein paper. Präfix
+                        path.fillColor = null; // Start transparent
+                        path.strokeColor = strokeColor ? strokeColor.clone() : null; // Klonen ist gut
+                        path.strokeWidth = 1;
+                        path.gridX = i;
+                        path.gridY = j;
+                        // Event Handlers bleiben gleich, 'this' bezieht sich auf den path
                         path.onMouseDown = function(event) { if (!isPaperReady) return; event.preventDefault(); isMouseDown = true; handlePixelClick(this, event); };
                         path.onMouseEnter = function(event) { if (!isPaperReady || !isMouseDown) return; handlePixelClick(this, event, true); };
                         paths[i * gridSize + j] = { x: i, y: j, pixel: path };
-                }}
+                    }
+                }
                 console.log(`Created ${paths.length} paths.`);
 
-                // Globale Maus-Events
-                paperScope.view.onMouseUp = () => { if (isMouseDown) { isMouseDown = false; lastPaintedCoords = { x: -1, y: -1 }; }};
-                paperScope.view.onMouseLeave = () => { if (isMouseDown) { isMouseDown = false; lastPaintedCoords = { x: -1, y: -1 }; }};
+                // Globale Maus-Events (auf globalem view)
+                view.onMouseUp = () => { if (isMouseDown) { isMouseDown = false; lastPaintedCoords = { x: -1, y: -1 }; }}; // <-- Kein paper. Präfix
+                view.onMouseLeave = () => { if (isMouseDown) { isMouseDown = false; lastPaintedCoords = { x: -1, y: -1 }; }}; // <-- Kein paper. Präfix
                 canvas.removeEventListener('contextmenu', preventContextMenu);
                 canvas.addEventListener('contextmenu', preventContextMenu);
 
                 // Alles zeichnen & Bereit-Status setzen
-                paperScope.view.draw();
-                isPaperReady = true; // <<< WICHTIG: Erst hier auf true setzen
+                view.draw(); // <-- Kein paper. Präfix
+                isPaperReady = true;
                 console.log("Grid creation complete. isPaperReady = true. Initial draw performed.");
 
             } catch (error) {
-                isPaperReady = false; // Sicherstellen, dass es false ist bei Fehler
+                isPaperReady = false;
                 console.error("FATAL ERROR during createGrid execution:", error);
                 matrixDiv.textContent = "Error creating grid. See console.";
             }
@@ -469,21 +462,18 @@
 
         function preventContextMenu(e) { e.preventDefault(); }
 
-        // --- Andere Funktionen (handlePixelClick, floodFill, getPixelPath, setActiveTool, generateMatrix) ---
-        // --- bleiben unverändert zur letzten funktionierenden Version ---
-        // Füge Sicherheitschecks hinzu, z.B. if (!isPaperReady) return; am Anfang jeder Funktion, die paperScope benötigt.
-
         function handlePixelClick(path, event, isDrag = false) {
-            if (!isPaperReady || !paperScope || !path || !currColor || !whiteColor) {
+            // Behalte die isPaperReady Prüfung und die robusten Color Checks
+            if (!isPaperReady || !path || !currColor || !whiteColor) {
                 console.warn("handlePixelClick ignored - Paper.js not ready or missing variables.");
                 return;
             }
-            // Rest der Funktion...
+
             const isLeftClick = event.event.button === 0;
             const isRightClick = event.event.button === 2;
 
             if (isDrag && path.gridX === lastPaintedCoords.x && path.gridY === lastPaintedCoords.y) {
-                 return;
+                return;
             }
 
             let redrawNeeded = false;
@@ -492,55 +482,60 @@
                 switch (currentTool) {
                     case 'draw':
                         if (isLeftClick) {
+                            // Behalte equals für präzisen Vergleich
                             if (!path.fillColor || !path.fillColor.equals(currColor)) {
-                               path.fillColor = currColor.clone();
-                               redrawNeeded = true;
+                                path.fillColor = currColor.clone(); // Klonen ist sicher
+                                redrawNeeded = true;
                             }
                         } else if (isRightClick) {
-                            if (path.fillColor !== null) {
-                               path.fillColor = null;
-                               redrawNeeded = true;
+                            if (path.fillColor !== null) { // Vergleiche mit null für "keine Farbe"
+                                path.fillColor = null; // Setze auf null statt 'white' für Transparenz/keine Füllung
+                                redrawNeeded = true;
                             }
                         }
                         break;
                     case 'fill':
                         if (isLeftClick) {
-                             floodFill(path.gridX, path.gridY, currColor);
-                             redrawNeeded = false;
+                            floodFill(path.gridX, path.gridY, currColor.clone()); // Übergebe Klon
+                            redrawNeeded = false; // floodFill zeichnet selbst
                         }
                         break;
-                     case 'eyedropper':
-                         if (isLeftClick) {
-                             const pickedColorObj = path.fillColor ? path.fillColor.clone() : whiteColor.clone();
-                             colorPickerInstance.color.hexString = pickedColorObj.toHex();
-                             inputColorHex.value = pickedColorObj.toHex();
-                             currColor = pickedColorObj;
-                             setActiveTool('draw');
-                         }
-                         break;
+                    case 'eyedropper':
+                        if (isLeftClick) {
+                            // Klonen und equals beibehalten
+                            const pickedColorObj = path.fillColor ? path.fillColor.clone() : whiteColor.clone();
+                            colorPickerInstance.color.hexString = pickedColorObj.toHex();
+                            inputColorHex.value = pickedColorObj.toHex();
+                            currColor = pickedColorObj;
+                            setActiveTool('draw'); // Zurück zum Zeichnen wechseln
+                            // Kein Redraw nötig, nur UI-Änderung
+                        }
+                        break;
                 }
             } catch (error) {
-                 console.error("Error during handlePixelClick action:", error);
+                console.error("Error during handlePixelClick action:", error);
             }
 
             lastPaintedCoords = { x: path.gridX, y: path.gridY };
             if (redrawNeeded) {
-                paperScope.view.draw();
+                view.draw(); // <-- Kein paper. Präfix
             }
         }
 
-        function floodFill(startX, startY, newColor) {
-             if (!isPaperReady || !paperScope) { console.warn("floodFill ignored - Paper.js not ready."); return; }
-             // Rest der Funktion...
-            const targetPathObj = getPixelPath(startX, startY);
-            if (!targetPathObj) { return; } // getPixelPath loggt schon
+        function floodFill(startX, startY, newColor) { // newColor ist bereits ein Color Objekt (oder null)
+             if (!isPaperReady) { console.warn("floodFill ignored - Paper.js not ready."); return; }
 
-            const targetColor = targetPathObj.pixel.fillColor;
+            const targetPathObj = getPixelPath(startX, startY);
+            if (!targetPathObj) return;
+
+            const targetColor = targetPathObj.pixel.fillColor; // Kann ein Color Objekt oder null sein
+
+            // Robuster Vergleich mit null und equals
             const isNewColorNull = !newColor;
             const isTargetColorNull = !targetColor;
 
-            if (isNewColorNull && isTargetColorNull) return;
-            if (!isNewColorNull && !isTargetColorNull && newColor.equals(targetColor)) return;
+            if (isNewColorNull && isTargetColorNull) return; // Nichts zu tun
+            if (!isNewColorNull && !isTargetColorNull && newColor.equals(targetColor)) return; // Gleiche Farbe
 
             const queue = [{ x: startX, y: startY }];
             const visited = new Set([`${startX},${startY}`]);
@@ -551,7 +546,8 @@
                 const currentPathObj = getPixelPath(x, y);
                 if (!currentPathObj) continue;
 
-                currentPathObj.pixel.fillColor = newColor ? newColor.clone() : null;
+                // Setze die neue Farbe (kann null sein)
+                currentPathObj.pixel.fillColor = newColor ? newColor.clone() : null; // Klonen zur Sicherheit
                 pixelsChanged++;
 
                 const neighbors = [ { nx: x, ny: y - 1 }, { nx: x, ny: y + 1 }, { nx: x - 1, ny: y }, { nx: x + 1, ny: y } ];
@@ -561,9 +557,11 @@
                      if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize && !visited.has(neighborKey)) {
                         const neighborPathObj = getPixelPath(nx, ny);
                          if (neighborPathObj) {
-                            const neighborColor = neighborPathObj.pixel.fillColor;
+                            const neighborColor = neighborPathObj.pixel.fillColor; // Kann Color oder null sein
                             const isNeighborColorNull = !neighborColor;
+
                             let match = false;
+                            // Vergleiche Target mit Neighbor (beide null oder beide nicht-null und gleich)
                             if (isTargetColorNull && isNeighborColorNull) match = true;
                             else if (!isTargetColorNull && !isNeighborColorNull && targetColor.equals(neighborColor)) match = true;
 
@@ -576,71 +574,68 @@
                  }
             }
             if (pixelsChanged > 0) {
-                paperScope.view.draw();
+                view.draw(); // <-- Kein paper. Präfix
             }
         }
 
         function getPixelPath(x, y) {
-             // Kein isPaperReady Check nötig, da es nur Daten liest
-            if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
+            // Bleibt gleich
+             if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
                 const index = x * gridSize + y;
-                // Prüfe ob Index im Array liegt UND ob das Element existiert
-                if (index < paths.length && paths[index]) {
-                  return paths[index];
-                }
+                if (index < paths.length && paths[index]) { return paths[index]; }
             }
-            // console.warn(`getPixelPath: Path not found for (${x}, ${y})`);
             return null;
         }
 
         function setActiveTool(toolName) {
-             // Kein isPaperReady Check nötig, UI Änderung
+            // Bleibt gleich (UI Logik)
             currentTool = toolName;
             currentToolDisplay.textContent = toolName.charAt(0).toUpperCase() + toolName.slice(1);
             document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
             const activeBtn = document.getElementById(`tool-${toolName}`);
             if (activeBtn) activeBtn.classList.add('active');
-
             canvas.classList.remove('eyedropper-cursor', 'fill-cursor');
             if (toolName === 'eyedropper') canvas.classList.add('eyedropper-cursor');
             else if (toolName === 'fill') canvas.classList.add('fill-cursor');
         }
 
         function generateMatrix() {
-            if (!isPaperReady || !paperScope || !paths || paths.length === 0 || !whiteColor) {
+             // Behalte isPaperReady Check und robuste Color Checks
+            if (!isPaperReady || !paths || paths.length === 0 || !whiteColor) {
                 matrixDiv.textContent = "Grid/State not properly initialized.";
                 console.warn("generateMatrix ignored - Paper.js not ready or missing prerequisites.");
                 return;
             }
-            // Rest der Funktion...
             console.log("Generating Matrix...");
 
             let colorMap = {};
             let colorDefinitions = {};
             let charCode = 97;
-            const whiteHex = whiteColor.toHex();
+            const whiteHex = whiteColor.toHex(); // Holen wir uns einmal
 
             paths.forEach(p => {
                 if (!p || !p.pixel) return;
-                const color = p.pixel.fillColor;
+                const color = p.pixel.fillColor; // Kann Color Objekt oder null sein
                 let key;
                 let isRealColor = false;
 
-                if (color) {
+                if (color) { // Prüfe ob es ein Color Objekt ist
                     key = color.toHex();
-                    if (key !== whiteHex) {
+                    if (!color.equals(whiteColor)) { // Vergleiche mit whiteColor Objekt
                         isRealColor = true;
                     } else {
-                        key = TRANSPARENT_KEY;
+                        key = TRANSPARENT_KEY; // Behandle explizites Weiß wie Transparent in der Matrix
                     }
                 } else {
-                    key = TRANSPARENT_KEY;
+                    key = TRANSPARENT_KEY; // null ist auch Transparent
                 }
 
+                // Rest der Logik zum Mappen von Farben zu Buchstaben bleibt gleich
                 if (isRealColor && !(key in colorMap)) {
                     const char = String.fromCharCode(charCode++);
                     colorMap[key] = char;
                     try {
+                       // Verwende Color Objekt direkt für RGB
                        colorDefinitions[key] = [ Math.round(color.red * 255), Math.round(color.green * 255), Math.round(color.blue * 255) ];
                     } catch(e) {
                          console.error(`Error converting color ${key} to RGB`, e);
@@ -649,9 +644,10 @@
                 }
             });
 
+             // Rest der Matrix-Ausgabe bleibt logisch gleich...
             let matrixOutput = "Color Definitions:\n";
             for (const key in colorMap) {
-                if (key !== TRANSPARENT_KEY) {
+                // if (key !== TRANSPARENT_KEY) { // Nur echte Farben definieren
                     const char = colorMap[key];
                     const rgb = colorDefinitions[key];
                     if (rgb && Array.isArray(rgb) && rgb.length === 3) {
@@ -659,28 +655,31 @@
                     } else {
                          matrixOutput += `${char} = (Error retrieving RGB) - ${key}\n`;
                     }
-                }
+                // }
             }
-            matrixOutput += "\nMatrix:\n";
+             matrixOutput += `\n. = (Transparent or White)\n`; // Definition für den Punkt
+             matrixOutput += "\nMatrix:\n";
 
             for (let j = 0; j < gridSize; j++) {
                 let rowChars = [];
                 for (let i = 0; i < gridSize; i++) {
                     const pathObj = getPixelPath(i, j);
-                    let char = '.';
+                    let char = '.'; // Standard ist Transparent/Weiß
                     let key = TRANSPARENT_KEY;
 
                     if (pathObj && pathObj.pixel && pathObj.pixel.fillColor) {
-                        const currentHex = pathObj.pixel.fillColor.toHex();
-                        if (currentHex !== whiteHex) {
-                            key = currentHex;
-                        }
+                         // Vergleiche mit whiteColor Objekt
+                         if (!pathObj.pixel.fillColor.equals(whiteColor)) {
+                            key = pathObj.pixel.fillColor.toHex();
+                         }
                     }
 
                     if (key !== TRANSPARENT_KEY && key in colorMap) {
                         char = colorMap[key];
                     } else if (key !== TRANSPARENT_KEY) {
+                        // Farbe existiert, ist aber nicht Weiß und nicht in der Map? Sollte nicht passieren.
                         char = '?';
+                        console.warn(`Matrix generation: Found color ${key} not in colorMap.`);
                     }
                     rowChars.push(char);
                 }
@@ -693,50 +692,55 @@
 
         // --- Event Listener für Buttons und Inputs ---
 
-        btnUpdateGrid.addEventListener('click', createGrid);
+        btnUpdateGrid.addEventListener('click', createGrid); // Löst Neuerstellung aus
         btnGenerateMatrix.addEventListener('click', generateMatrix);
 
         btnReset.addEventListener('click', () => {
-            if (!isPaperReady || !paperScope || !paths || !whiteColor) return;
-            paths.forEach(p => { if (p && p.pixel) p.pixel.fillColor = null; });
-            colorPickerInstance.color.hexString = '#ffffff';
+            if (!isPaperReady || !paths || !whiteColor) return; // Prüfungen beibehalten
+            paths.forEach(p => { if (p && p.pixel) p.pixel.fillColor = null; }); // Auf null setzen
+            // UI Updates
+            if(colorPickerInstance) colorPickerInstance.color.hexString = '#ffffff';
             inputColorHex.value = '#ffffff';
-            currColor = whiteColor.clone();
+            if(whiteColor) currColor = whiteColor.clone(); // currColor zurücksetzen
             matrixDiv.textContent = 'Grid reset. Click "Generate Matrix" again.';
-            paperScope.view.draw();
+            view.draw(); // <-- Kein paper. Präfix
         });
 
         btnBlackify.addEventListener('click', () => {
-             if (!isPaperReady || !paperScope || !paths || !whiteColor || !blackColor) return;
+             if (!isPaperReady || !paths || !whiteColor || !blackColor) return; // Prüfungen
             let changed = 0;
             paths.forEach(p => {
+                // Prüfe ob keine Farbe (null) oder explizit weiß
                 if (p && p.pixel && (!p.pixel.fillColor || p.pixel.fillColor.equals(whiteColor))) {
-                    p.pixel.fillColor = blackColor.clone();
+                    p.pixel.fillColor = blackColor.clone(); // Klonen
                     changed++;
                 }
             });
-            if (changed > 0) paperScope.view.draw();
+            if (changed > 0) view.draw(); // <-- Kein paper. Präfix
         });
 
          btnToggleGridlines.addEventListener('click', () => {
-             if (!isPaperReady || !paperScope || !paths || !blackColor) return;
+             if (!isPaperReady || !paths || !blackColor) return; // Prüfungen
              showGridLines = !showGridLines;
              const stroke = showGridLines ? blackColor : null;
              paths.forEach(p => {
-                 if (p && p.pixel) p.pixel.strokeColor = stroke ? stroke.clone() : null;
+                 if (p && p.pixel) p.pixel.strokeColor = stroke ? stroke.clone() : null; // Klonen
              });
+             // UI Text anpassen (bleibt gleich)
              const textNode = Array.from(btnToggleGridlines.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
              if(textNode) textNode.nodeValue = showGridLines ? ' Hide Grid Lines' : ' Show Grid Lines';
              btnToggleGridlines.classList.toggle('icon-grid', showGridLines);
-             paperScope.view.draw();
+             view.draw(); // <-- Kein paper. Präfix
          });
 
         btnExportPng.addEventListener('click', () => {
-             if (!isPaperReady || !paperScope || !paperScope.view || !paperScope.view.element) return;
-             paperScope.view.draw();
+             // Verwende globales view
+             if (!isPaperReady || !view || !view.element) return;
+             view.draw(); // Sicherstellen, dass aktuell gezeichnet ist
 
             const originalStrokes = [];
             let strokesChanged = false;
+            // Gridlines vor dem Export ausblenden (Logik bleibt)
             if (showGridLines) {
                 paths.forEach(p => {
                    if (p && p.pixel && p.pixel.strokeColor) {
@@ -745,11 +749,11 @@
                      strokesChanged = true;
                    }
                 });
-                if (strokesChanged) paperScope.view.draw();
+                if (strokesChanged) view.draw(); // Neu zeichnen ohne Grid
             }
 
             try {
-                const canvasElement = paperScope.view.element;
+                const canvasElement = view.element; // <-- Globales view verwenden
                 const dataURL = canvasElement.toDataURL('image/png');
                 const link = document.createElement('a'); link.download = 'pixel-art.png'; link.href = dataURL;
                 document.body.appendChild(link); link.click(); document.body.removeChild(link);
@@ -757,31 +761,36 @@
                  console.error("Error during PNG export:", error); alert("Failed to export PNG.");
             }
 
+            // Gridlines wiederherstellen (Logik bleibt)
             if (strokesChanged) {
                 originalStrokes.forEach(item => { if(item.path) { item.path.strokeColor = item.strokeColor; item.path.strokeWidth = item.strokeWidth; } });
-                 paperScope.view.draw();
+                 view.draw(); // Neu zeichnen mit Grid
             }
         });
 
         btnColorInputOk.addEventListener('click', () => {
-            if (!isPaperReady || !paperScope || !currColor || !colorPickerInstance) return;
+            // Verwende globalen Color Konstruktor
+            if (!isPaperReady || !currColor || !colorPickerInstance) return;
             const hexValue = inputColorHex.value.trim();
             try {
                 if (/^#([0-9A-F]{3}){1,2}$/i.test(hexValue)) {
-                   const newColor = new paperScope.Color(hexValue);
-                   colorPickerInstance.color.hexString = newColor.toHex();
-                   currColor = newColor;
+                   const newColor = new Color(hexValue); // <-- Kein paper. Präfix
+                   if(colorPickerInstance) colorPickerInstance.color.hexString = newColor.toHex(); // iro.js aktualisieren
+                   currColor = newColor; // Aktuelle Farbe setzen
                 } else {
                     throw new Error("Invalid hex format. Use #rrggbb or #rgb.");
                 }
             } catch (e) {
                 console.error("Invalid color input:", hexValue, e);
                 alert(e.message || "Invalid color format.");
-                inputColorHex.value = currColor.toHex();
+                // Setze Input auf die vorherige gültige Farbe zurück
+                if(currColor) inputColorHex.value = currColor.toHex();
             }
         });
+        // Keypress listener bleibt gleich
         inputColorHex.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); btnColorInputOk.click(); } });
 
+        // Tool Buttons bleiben gleich
         toolDrawBtn.addEventListener('click', () => setActiveTool('draw'));
         toolFillBtn.addEventListener('click', () => setActiveTool('fill'));
         toolEyedropperBtn.addEventListener('click', () => setActiveTool('eyedropper'));
@@ -789,8 +798,8 @@
         // --- Initialer Start ---
         try {
             setActiveTool('draw');
-            createGrid(); // Starte die Grid-Erstellung
-            console.log("Initial setup call complete."); // Beachte: Grid ist evtl. noch nicht fertig
+            createGrid(); // Starte die Grid-Erstellung (verwendet jetzt paper.install)
+            console.log("Initial setup call complete.");
         } catch (error) {
             console.error("Error during initial setup call:", error);
             alert("Failed to initiate the editor. Please check the console.");
@@ -798,7 +807,3 @@
 
     }); // Ende DOMContentLoaded
 </script>
-
-</body>
-</html>
-

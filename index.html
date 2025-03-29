@@ -303,25 +303,27 @@
         let isPaperReady = false;
 
         // --- Color Picker Initialisierung (iro.js) ---
+                // --- Color Picker Initialisierung (iro.js) ---
+        /* // Temporär auskommentieren START
         let colorPickerInstance;
         try {
             colorPickerInstance = new iro.ColorPicker(colorPickerContainer, {
-                width: 200, color: "#ffffff", borderWidth: 1, borderColor: "#ccc",
-                layout: [ /* ... Layout bleibt gleich ... */
-                    { component: iro.ui.Wheel }, { component: iro.ui.Box },
-                    { component: iro.ui.Slider, options: { sliderType: 'hue' } },
-                    { component: iro.ui.Slider, options: { sliderType: 'saturation' } },
-                    { component: iro.ui.Slider, options: { sliderType: 'value' } },
-                 ]
+                // ... options ...
             });
             console.log("iro.js Color Picker initialized.");
 
             // --- Event Listener für Color Picker ---
             colorPickerInstance.on('color:change', (color) => {
-                if (!isPaperReady || !currColor || !whiteColor) { // Prüfung beibehalten
-                    console.log("Color Picker change event ignored - Paper.js not ready yet.");
-                    return;
-                }
+               // ... listener code ...
+            });
+            console.log("Color Picker 'color:change' listener attached.");
+
+        } catch (error) {
+            console.error("FATAL: Failed to initialize iro.js Color Picker!", error);
+            alert("Error initializing color picker. Please check console.");
+            // return; // Nicht returnen, damit der Rest des Codes läuft
+        }
+        */ // Temporär auskommentieren ENDE
                 try {
                     // Verwende den globalen Color-Konstruktor
                     const newColor = new Color(color.hexString); // <-- Kein paper. Präfix

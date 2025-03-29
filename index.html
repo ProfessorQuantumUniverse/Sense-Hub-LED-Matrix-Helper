@@ -554,9 +554,10 @@
             }
             console.log("Generating Matrix...");
 
-            let colorMap = {}; // Map von Farb-Schlüssel (Hex oder TRANSPARENT_KEY) zu Zeichen { key: char }
-            let colorDefinitions = {}; // Map von Farb-Schlüssel zu RGB-Array { key: [r, g, b] }
+            let colorMap = {}; // Map: Farb-Schlüssel (Hex oder TRANSPARENT_KEY) -> Zeichen { key: char }
+            let colorDefinitions = {}; // Map: Farb-Schlüssel -> RGB-Array { key: [r, g, b] }
             let charCode = 97; // 'a'
+            const whiteHex = whiteColor.toHex(); // Hex für Weiß für einfachen Vergleich
 
             // 1. Durchlauf: Finde alle einzigartigen Farben (außer weiß/transparent) und weise Zeichen zu
             paths.forEach(p => {
@@ -564,12 +565,16 @@
                 let key;
                 let isRealColor = false;
 
-                if (color && !color.equals(whiteColor)) {
-                    // Es ist eine Farbe (nicht null und nicht weiß)
-                    key = color.toHex(); // #rrggbb als Schlüssel
-                    isRealColor = true;
+                // Bestimme den Schlüssel für die Farbe
+                if (color) {
+                    key = color.toHex(); // Benutze Hex als Schlüssel
+                    if (key !== whiteHex) { // Nur Farben, die nicht weiß sind
+                        isRealColor = true;
+                    } else {
+                        key = TRANSPARENT_KEY; // Behandle weiß wie transparent
+                    }
                 } else {
-                    // Es ist transparent (null) oder weiß
+                    // Pixel ist transparent (null)
                     key = TRANSPARENT_KEY;
                 }
 
@@ -577,24 +582,32 @@
                 if (isRealColor && !(key in colorMap)) {
                     const char = String.fromCharCode(charCode++);
                     colorMap[key] = char;
-                    // Speichere RGB-Werte für die Definition (0-255)
+                    // *** KORREKTUR SICHERSTELLEN: Speichere das RGB-Array ***
                     colorDefinitions[key] = [
                         Math.round(color.red * 255),
                         Math.round(color.green * 255),
                         Math.round(color.blue * 255)
                     ];
-                    // console.log(`Mapped color ${key} to char '${char}' (RGB: ${colorDefinitions[key]})`);
+                     console.log(`Mapped color ${key} to char '${char}' (RGB: ${colorDefinitions[key]})`);
                 }
             });
 
             // 2. Baue den Output-String
             let matrixOutput = "Color Definitions:\n";
             // Füge Definitionen für die gefundenen Farben hinzu
-            for (const key in colorMap) {
-                if (key !== TRANSPARENT_KEY) {
+            for (const key in colorMap) { // Iteriere über die Schlüssel der gefundenen Farben
+                if (key !== TRANSPARENT_KEY) { // Überspringe den Transparent-Schlüssel
                     const char = colorMap[key];
+                    // *** KORREKTUR & VALIDIERUNG: Hole RGB-Array und prüfe es ***
                     const rgb = colorDefinitions[key];
-                    matrixOutput += `${char} = (${rgb.join(',')}) - ${key}\n`; // Zeige auch Hex
+                    if (rgb && Array.isArray(rgb) && rgb.length === 3) {
+                        // *** KORREKTUR: Benutze join(',') für die Ausgabe ***
+                        matrixOutput += `${char} = (${rgb.join(',')}) - ${key}\n`;
+                    } else {
+                        // Fallback, falls etwas schiefging
+                        console.error(`Error retrieving/validating RGB for key: ${key}. Found:`, rgb);
+                        matrixOutput += `${char} = (Error retrieving RGB) - ${key}\n`;
+                    }
                 }
             }
             matrixOutput += "\nMatrix:\n";
@@ -605,20 +618,30 @@
                 for (let i = 0; i < gridSize; i++) { // Spalten (x)
                     const pathObj = getPixelPath(i, j); // Pixel bei (x=i, y=j) holen
                     let char = '.'; // Standard für weiß/transparent
+                    let key = TRANSPARENT_KEY; // Standard-Schlüssel
 
-                    if (pathObj && pathObj.pixel.fillColor && !pathObj.pixel.fillColor.equals(whiteColor)) {
-                        // Es ist eine Farbe (nicht null, nicht weiß)
-                        const key = pathObj.pixel.fillColor.toHex();
-                        if (key in colorMap) {
-                            char = colorMap[key]; // Zugeordnetes Zeichen holen
-                        } else {
-                            console.warn(`Matrix Generation: Color ${key} at (${i},${j}) not found in colorMap!`);
-                            char = '?'; // Fehlerzeichen
+                    if (pathObj && pathObj.pixel.fillColor) {
+                        const currentHex = pathObj.pixel.fillColor.toHex();
+                        if (currentHex !== whiteHex) {
+                            // Es ist eine "echte" Farbe (nicht null, nicht weiß)
+                            key = currentHex;
                         }
+                        // Wenn es weiß ist, bleibt key = TRANSPARENT_KEY
                     }
+                    // Wenn es null war, bleibt key = TRANSPARENT_KEY
+
+                    // Wenn der Schlüssel einer gemappten Farbe entspricht, benutze das Zeichen
+                    if (key !== TRANSPARENT_KEY && key in colorMap) {
+                        char = colorMap[key];
+                    } else if (key !== TRANSPARENT_KEY) {
+                        // Farbe wurde aus irgendeinem Grund nicht gemappt (sollte nicht passieren)
+                        console.warn(`Matrix Generation: Color ${key} at (${i},${j}) not found in colorMap!`);
+                        char = '?';
+                    }
+                    // Wenn key == TRANSPARENT_KEY, bleibt char '.'
+
                     rowChars.push(char);
                 }
-                // Füge die Zeile zum Output hinzu, mit Komma am Ende (außer letzte Zeile)
                 matrixOutput += rowChars.join(", ") + (j < gridSize - 1 ? "," : "") + "\n";
             }
 

@@ -5,9 +5,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pixel Matrix Editor</title>
+  <!-- Paper.js Bibliothek -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script>
+  <!-- iro.js Farbwähler Bibliothek -->
   <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
   <style>
+    /* CSS bleibt weitgehend unverändert, da es nicht die Ursache des Problems war */
     :root {
       --primary-color: #4a90e2;
       --secondary-color: #f5f5f5;
@@ -59,13 +62,15 @@
 
     #cv {
       border: 2px solid var(--canvas-border);
-      cursor: crosshair; /* Default cursor */
+      cursor: crosshair; /* Standard-Cursor */
       margin-bottom: 15px;
-       /* Prevent image dragging */
+       /* Verhindert das Ziehen von Bildern */
       user-select: none;
       -webkit-user-select: none;
       -moz-user-select: none;
       -ms-user-select: none;
+      /* WICHTIG: Verhindert Standard-Browserverhalten bei Drag-Events auf dem Canvas */
+      touch-action: none;
     }
 
      #cv.eyedropper-cursor {
@@ -73,9 +78,8 @@
     }
 
     #cv.fill-cursor {
-        cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='black'><path d='M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 18v-6h4v6h-4z'/></svg>") 8 16, pointer; /* Paint bucket-like cursor */
+        cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='black'><path d='M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 18v-6h4v6h-4z'/></svg>") 8 16, pointer; /* Farbeimer-artiger Cursor */
     }
-
 
     .control-group {
       border: 1px solid var(--border-color);
@@ -91,12 +95,12 @@
 
      .control-group label,
      .control-group button {
-        margin-bottom: 8px; /* Add some space below labels and buttons */
+        margin-bottom: 8px; /* Fügt etwas Platz unter Labels und Buttons hinzu */
      }
 
     .control-group input[type="number"],
     .control-group input[type="text"] {
-      width: calc(100% - 16px); /* Full width minus padding */
+      width: calc(100% - 16px); /* Volle Breite minus Padding */
       padding: 8px;
       border: 1px solid var(--border-color);
       border-radius: 4px;
@@ -117,10 +121,10 @@
       cursor: pointer;
       transition: background-color 0.2s ease;
       font-size: 1em;
-      margin: 5px 2px; /* Added some margin */
-      display: inline-flex; /* Align icon and text */
-      align-items: center; /* Align icon and text */
-      gap: 5px; /* Space between icon and text */
+      margin: 5px 2px; /* Etwas Rand hinzugefügt */
+      display: inline-flex; /* Richtet Icon und Text aus */
+      align-items: center; /* Richtet Icon und Text aus */
+      gap: 5px; /* Platz zwischen Icon und Text */
     }
 
     button:hover {
@@ -147,7 +151,6 @@
         box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
     }
 
-
     #color-picker-container {
       display: flex;
       justify-content: center;
@@ -155,10 +158,10 @@
     }
 
     .iro__slider {
-        border-radius: 4px; /* Slightly round slider */
+        border-radius: 4px; /* Leicht abgerundeter Slider */
     }
     .iro__marker {
-        border: 2px solid white; /* Make marker more visible */
+        border: 2px solid white; /* Macht den Marker sichtbarer */
         box-shadow: 0 0 3px rgba(0,0,0,0.5);
     }
 
@@ -169,14 +172,13 @@
     }
      .color-input-group input[type="text"] {
         flex-grow: 1;
-        margin-top: 0; /* Override general margin */
-        margin-bottom: 0; /* Override general margin */
+        margin-top: 0; /* Überschreibt allgemeinen Rand */
+        margin-bottom: 0; /* Überschreibt allgemeinen Rand */
      }
     .color-input-group button {
         padding: 8px 10px;
-        margin: 0; /* Override general margin */
+        margin: 0; /* Überschreibt allgemeinen Rand */
     }
-
 
     #matrix {
       white-space: pre;
@@ -191,7 +193,7 @@
       line-height: 1.4;
     }
 
-    /* Simple icons using characters for demo */
+    /* Einfache Icons mit Zeichen für Demo */
      .icon-fill::before { content: "💧"; margin-right: 4px;}
      .icon-eyedropper::before { content: "🧪"; margin-right: 4px; }
      .icon-draw::before { content: "✏️"; margin-right: 4px; }
@@ -253,7 +255,7 @@
 
     <div class="canvas-container">
       <canvas id="cv"></canvas>
-      <!-- Canvas size will be set dynamically by JS -->
+      <!-- Canvas-Größe wird dynamisch durch JS gesetzt -->
     </div>
 
     <div class="output-container">
@@ -264,414 +266,521 @@
   </div>
 
   <script>
-    const canvas = document.getElementById("cv");
-    const ctx = canvas.getContext('2d'); // Needed for PNG export and potentially other ops
-    const matrixDiv = document.getElementById("matrix");
+    // Warten, bis das DOM vollständig geladen ist
+    document.addEventListener('DOMContentLoaded', () => {
 
-    // --- Control Elements ---
-    const btnGenerateMatrix = document.getElementById("done");
-    const btnReset = document.getElementById("reset");
-    const btnBlackify = document.getElementById("blackify");
-    const btnExportPng = document.getElementById("export-png");
-    const btnUpdateGrid = document.getElementById("update-grid");
-    const btnToggleGridlines = document.getElementById("toggle-gridlines");
-    const inputGridSize = document.getElementById("grid-size");
-    const inputCellSize = document.getElementById("cell-size");
-    const inputChangeAll = document.getElementById("changeforall");
-    const inputColorHex = document.getElementById("color-input");
-    const btnColorInputOk = document.getElementById("color-input-ok");
-    const toolDrawBtn = document.getElementById('tool-draw');
-    const toolFillBtn = document.getElementById('tool-fill');
-    const toolEyedropperBtn = document.getElementById('tool-eyedropper');
-    const currentToolDisplay = document.getElementById('current-tool-display');
-    const colorPickerContainer = document.getElementById('color-picker');
+        const canvas = document.getElementById("cv");
+        // HINWEIS: Wir verwenden hier nicht mehr `canvas.getContext('2d')`, da Paper.js das Canvas-Management übernimmt.
+        // Für den PNG-Export greifen wir später direkt auf das von Paper.js verwaltete Canvas zu.
+        const matrixDiv = document.getElementById("matrix");
 
-    // --- State Variables ---
-    let paperScope; // Hold the paper.js scope
-    let paths = []; // Store path objects {x, y, pixel}
-    let gridSize = 8;
-    let cellSize = 30;
-    let currColor = new paper.Color('white'); // Use paper.Color
-    let isMouseDown = false;
-    let lastPaintedCoords = { x: -1, y: -1 }; // For smoother dragging
-    let showGridLines = true;
-    let currentTool = 'draw'; // 'draw', 'fill', 'eyedropper'
+        // --- Steuerelemente ---
+        const btnGenerateMatrix = document.getElementById("done");
+        const btnReset = document.getElementById("reset");
+        const btnBlackify = document.getElementById("blackify");
+        const btnExportPng = document.getElementById("export-png");
+        const btnUpdateGrid = document.getElementById("update-grid");
+        const btnToggleGridlines = document.getElementById("toggle-gridlines");
+        const inputGridSize = document.getElementById("grid-size");
+        const inputCellSize = document.getElementById("cell-size");
+        const inputChangeAll = document.getElementById("changeforall");
+        const inputColorHex = document.getElementById("color-input");
+        const btnColorInputOk = document.getElementById("color-input-ok");
+        const toolDrawBtn = document.getElementById('tool-draw');
+        const toolFillBtn = document.getElementById('tool-fill');
+        const toolEyedropperBtn = document.getElementById('tool-eyedropper');
+        const currentToolDisplay = document.getElementById('current-tool-display');
+        const colorPickerContainer = document.getElementById('color-picker');
 
-    // --- Setup Color Picker ---
-    const colorPicker = new iro.ColorPicker(colorPickerContainer, {
-        width: 200,
-        color: "#fff",
-        borderWidth: 1,
-        borderColor: "#ccc",
-        layout: [
-            { component: iro.ui.Wheel },
-            { component: iro.ui.Box },
-            { component: iro.ui.Slider, options: { sliderType: 'hue' } },
-            { component: iro.ui.Slider, options: { sliderType: 'saturation' } },
-            { component: iro.ui.Slider, options: { sliderType: 'value' } },
-            // { component: iro.ui.Slider, options: { sliderType: 'alpha' } }, // Uncomment for transparency control
-        ]
-    });
+        // --- Zustandsvariablen ---
+        let paperScope; // Hält den Paper.js-Scope
+        let paths = []; // Speichert Pfadobjekte {x, y, pixel}
+        let gridSize = 8;
+        let cellSize = 30;
+        // KORREKTUR: Initialisierung von currColor innerhalb des Scopes nach Paper.js Setup
+        let currColor; // = new paperScope.Color('white'); // Wird in createGrid initialisiert
+        let isMouseDown = false;
+        let lastPaintedCoords = { x: -1, y: -1 }; // Für flüssigeres Ziehen
+        let showGridLines = true;
+        let currentTool = 'draw'; // 'draw', 'fill', 'eyedropper'
 
-    colorPicker.on('color:change', (color) => {
-      const newColor = new paper.Color(color.hexString); // Use Paper.js color object
-      // Avoid triggering mass change if color hasn't actually changed significantly
-      if (!currColor || !currColor.equals(newColor)) {
-            currColor = newColor;
-            if (inputChangeAll.checked) {
-                paths.forEach(p => {
-                    // Only change pixels that are not transparent/white
-                    if (p.pixel.fillColor && !p.pixel.fillColor.equals(new paper.Color('white'))) {
-                         p.pixel.fillColor = currColor;
-                    }
-                 });
-                 paperScope.view.draw(); // Redraw the view
-            }
-            inputColorHex.value = currColor.toCSS(true); // Use hex for input field
-      }
-    });
+        // --- Farbwähler Setup ---
+        const colorPicker = new iro.ColorPicker(colorPickerContainer, {
+            width: 200,
+            color: "#ffffff", // Startet mit Weiß
+            borderWidth: 1,
+            borderColor: "#ccc",
+            layout: [
+                { component: iro.ui.Wheel },
+                { component: iro.ui.Box },
+                { component: iro.ui.Slider, options: { sliderType: 'hue' } },
+                { component: iro.ui.Slider, options: { sliderType: 'saturation' } },
+                { component: iro.ui.Slider, options: { sliderType: 'value' } },
+                // { component: iro.ui.Slider, options: { sliderType: 'alpha' } }, // Einkommentieren für Transparenzsteuerung
+            ]
+        });
 
-     // --- Tool Selection Logic ---
-    function setActiveTool(toolName) {
-        currentTool = toolName;
-        currentToolDisplay.textContent = toolName.charAt(0).toUpperCase() + toolName.slice(1); // Capitalize
+        // --- Event Listener für Farbwähler ---
+        colorPicker.on('color:change', (color) => {
+          // Stelle sicher, dass paperScope initialisiert ist
+          if (!paperScope) return;
 
-        // Update button styles
-        document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
-        const activeBtn = document.getElementById(`tool-${toolName}`);
-        if (activeBtn) activeBtn.classList.add('active');
+          // KORREKTUR: Verwende paperScope.Color für die Konvertierung
+          const newColor = new paperScope.Color(color.hexString);
 
-        // Update cursor
-        canvas.classList.remove('eyedropper-cursor', 'fill-cursor');
-        if (toolName === 'eyedropper') {
-            canvas.classList.add('eyedropper-cursor');
-        } else if (toolName === 'fill') {
-             canvas.classList.add('fill-cursor');
-        } else {
-             // Default cursor is set in CSS, no class needed or use crosshair explicitly
-             // canvas.style.cursor = 'crosshair';
-        }
-    }
+          // KORREKTUR: Die Logik zur Aktualisierung von currColor muss sicherstellen,
+          // dass die Variable *immer* aktualisiert wird, wenn sich die Farbe ändert,
+          // unabhängig von der Checkbox 'changeforall'.
+          // Die Prüfung `!currColor.equals(newColor)` verhindert unnötige Updates bei minimalen Änderungen.
+          if (!currColor || !currColor.equals(newColor)) {
+                // console.log("Updating currColor to:", newColor.toCSS(true)); // Debugging
+                currColor = newColor; // <<<< WICHTIG: Aktualisiere die globale Farbvariable
 
-    toolDrawBtn.addEventListener('click', () => setActiveTool('draw'));
-    toolFillBtn.addEventListener('click', () => setActiveTool('fill'));
-    toolEyedropperBtn.addEventListener('click', () => setActiveTool('eyedropper'));
-
-
-    // --- Grid Creation Function ---
-    function createGrid() {
-        // Clear previous project if it exists
-        if (paperScope && paperScope.project) {
-            paperScope.project.clear();
-        }
-
-        // Setup new Paper.js scope for the canvas
-        paperScope = new paper.PaperScope();
-        paperScope.setup(canvas);
-        paperScope.install(window); // Install in global scope temporarily for callbacks
-
-        paths = []; // Reset paths array
-        gridSize = parseInt(inputGridSize.value) || 8;
-        cellSize = parseInt(inputCellSize.value) || 30;
-        canvas.width = gridSize * cellSize;
-        canvas.height = gridSize * cellSize;
-        paperScope.view.viewSize = new paperScope.Size(canvas.width, canvas.height);
-
-        for (let i = 0; i < gridSize; i++) {
-            for (let j = 0; j < gridSize; j++) {
-                const rect = new paperScope.Rectangle(
-                    new paperScope.Point(i * cellSize, j * cellSize),
-                    new paperScope.Size(cellSize, cellSize)
-                );
-                const path = new paperScope.Path.Rectangle(rect);
-                path.fillColor = null; // Start transparent (or use 'white')
-                path.strokeColor = showGridLines ? 'black' : null;
-                path.strokeWidth = 1;
-
-                // Store grid coordinates with the path
-                path.gridX = i;
-                path.gridY = j;
-
-                // --- Mouse Event Handlers for Pixels ---
-                 path.onMouseDown = function(event) {
-                    event.preventDefault(); // Prevent text selection/dragging
-                    isMouseDown = true;
-                    handlePixelClick(this, event);
-                };
-
-                path.onMouseEnter = function(event) {
-                    if (isMouseDown) {
-                        handlePixelClick(this, event, true); // Pass 'true' for drag
-                    }
-                };
-
-                 // Add path object to our array
-                 paths.push({ x: i, y: j, pixel: path });
-            }
-        }
-
-         // --- Global Mouse Up Handler ---
-        paperScope.view.onMouseUp = () => {
-            if (isMouseDown) {
-                isMouseDown = false;
-                 lastPaintedCoords = { x: -1, y: -1 }; // Reset last painted coord on mouse up
-            }
-        };
-
-        // Prevent context menu on right-click
-        canvas.addEventListener('contextmenu', e => e.preventDefault());
-
-        paperScope.view.draw(); // Initial draw
-    }
-
-    // --- Pixel Interaction Logic ---
-    function handlePixelClick(path, event, isDrag = false) {
-        const isLeftClick = event.event.button === 0; // 0 = left, 2 = right
-
-         // Avoid re-painting the same cell repeatedly during a single drag motion
-        if (isDrag && path.gridX === lastPaintedCoords.x && path.gridY === lastPaintedCoords.y) {
-             return;
-         }
-
-        switch (currentTool) {
-            case 'draw':
-                path.fillColor = isLeftClick ? currColor.clone() : null; // Left click draws, Right click erases (sets to null/transparent)
-                break;
-            case 'fill':
-                if (isLeftClick) { // Only fill on left click
-                     floodFill(path.gridX, path.gridY, currColor);
-                }
-                break;
-             case 'eyedropper':
-                 if (isLeftClick) { // Only pick on left click
-                     const pickedColor = path.fillColor ? path.fillColor.toCSS(true) : '#ffffff'; // Default to white if null/transparent
-                     colorPicker.color.hexString = pickedColor; // Update color picker
-                     inputColorHex.value = pickedColor; // Update text input
-                     setActiveTool('draw'); // Switch back to draw tool after picking
-                 }
-                 break;
-        }
-
-         lastPaintedCoords = { x: path.gridX, y: path.gridY };
-         paperScope.view.draw(); // Redraw needed elements
-    }
-
-    // --- Flood Fill Implementation (BFS) ---
-    function floodFill(startX, startY, newColor) {
-        const targetColor = getPixelPath(startX, startY)?.pixel.fillColor;
-
-         // If the target color is the same as the new color, do nothing
-         // Handle null/undefined comparison carefully
-         const newColorIsNull = !newColor || newColor.toCSS(true) === 'rgba(0,0,0,0)'; // Assuming transparent is represented by null/rgba(0,0,0,0)
-         const targetColorIsNull = !targetColor || targetColor.toCSS(true) === 'rgba(0,0,0,0)';
-
-         if (newColorIsNull && targetColorIsNull) return;
-         if (!newColorIsNull && !targetColorIsNull && newColor.equals(targetColor)) return;
-
-
-        const queue = [{ x: startX, y: startY }];
-        const visited = new Set([`${startX},${startY}`]); // Keep track of visited pixels to avoid infinite loops
-
-         while (queue.length > 0) {
-            const { x, y } = queue.shift();
-            const currentPath = getPixelPath(x, y);
-
-             if (!currentPath) continue; // Should not happen in grid bounds
-
-            // Color the current pixel
-            currentPath.pixel.fillColor = newColor ? newColor.clone() : null;
-
-
-             // Check neighbors (up, down, left, right)
-            const neighbors = [
-                 { nx: x, ny: y - 1 }, { nx: x, ny: y + 1 },
-                 { nx: x - 1, ny: y }, { nx: x + 1, ny: y }
-             ];
-
-            for (const { nx, ny } of neighbors) {
-                 const neighborKey = `${nx},${ny}`;
-                 // Check bounds and if already visited
-                 if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize && !visited.has(neighborKey)) {
-                    const neighborPath = getPixelPath(nx, ny);
-                     if (neighborPath) {
-                        const neighborColor = neighborPath.pixel.fillColor;
-                         const neighborColorIsNull = !neighborColor || neighborColor.toCSS(true) === 'rgba(0,0,0,0)';
-
-                        // Check if neighbor has the target color
-                         if ((targetColorIsNull && neighborColorIsNull) || (!targetColorIsNull && !neighborColorIsNull && targetColor.equals(neighborColor))) {
-                            visited.add(neighborKey);
-                             queue.push({ x: nx, y: ny });
+                // Wende die Farbe auf alle an, wenn die Checkbox aktiviert ist
+                if (inputChangeAll.checked) {
+                    const whiteColor = new paperScope.Color('white'); // Referenzfarbe für Vergleich
+                    paths.forEach(p => {
+                        // Ändere nur Pixel, die nicht transparent/weiß sind
+                        if (p.pixel.fillColor && !p.pixel.fillColor.equals(whiteColor)) {
+                             // KORREKTUR: Verwende clone(), um sicherzustellen, dass jedes Pixel sein eigenes Farbobjekt bekommt
+                             p.pixel.fillColor = currColor.clone();
                         }
+                     });
+                     paperScope.view.draw(); // Zeichne die Ansicht neu
+                }
+                // Aktualisiere immer das Textfeld, auch wenn 'changeforall' nicht aktiv ist
+                inputColorHex.value = currColor.toCSS(true); // Verwende Hex für das Eingabefeld
+          }
+        });
+
+        // --- Werkzeugauswahl-Logik ---
+        function setActiveTool(toolName) {
+            currentTool = toolName;
+            // KORREKTUR: Tool-Name korrekt anzeigen (Großbuchstabe am Anfang)
+            currentToolDisplay.textContent = toolName.charAt(0).toUpperCase() + toolName.slice(1);
+
+            // Aktualisiere Button-Stile
+            document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById(`tool-${toolName}`);
+            if (activeBtn) activeBtn.classList.add('active');
+
+            // Aktualisiere Cursor
+            canvas.classList.remove('eyedropper-cursor', 'fill-cursor');
+            if (toolName === 'eyedropper') {
+                canvas.classList.add('eyedropper-cursor');
+            } else if (toolName === 'fill') {
+                 canvas.classList.add('fill-cursor');
+            } else {
+                 // Standard-Cursor (crosshair) wird durch CSS gesetzt, keine Klasse nötig
+                 // canvas.style.cursor = 'crosshair'; // Explizites Setzen wäre auch möglich
+            }
+        }
+
+        toolDrawBtn.addEventListener('click', () => setActiveTool('draw'));
+        toolFillBtn.addEventListener('click', () => setActiveTool('fill'));
+        toolEyedropperBtn.addEventListener('click', () => setActiveTool('eyedropper'));
+
+
+        // --- Grid-Erstellungsfunktion ---
+        function createGrid() {
+            // Lösche vorheriges Projekt, falls vorhanden
+            if (paperScope && paperScope.project) {
+                paperScope.project.clear();
+            }
+
+            // Richte neuen Paper.js-Scope für das Canvas ein
+            // KORREKTUR: Vermeide `paperScope.install(window)` wenn möglich.
+            // Greife stattdessen explizit über `paperScope.` auf Paper.js-Objekte zu.
+            paperScope = new paper.PaperScope();
+            paperScope.setup(canvas);
+            // paperScope.install(window); // NICHT EMPFOHLEN
+
+            // KORREKTUR: Initialisiere currColor *nachdem* paperScope eingerichtet wurde
+            currColor = new paperScope.Color('white');
+            // Synchronisiere Farbwähler mit der initialen Farbe (obwohl er schon auf weiß starten sollte)
+            colorPicker.color.hexString = currColor.toCSS(true);
+            inputColorHex.value = currColor.toCSS(true);
+
+
+            paths = []; // Setze Pfad-Array zurück
+            gridSize = parseInt(inputGridSize.value) || 8;
+            cellSize = parseInt(inputCellSize.value) || 30;
+            const totalSize = gridSize * cellSize;
+            canvas.width = totalSize;
+            canvas.height = totalSize;
+            paperScope.view.viewSize = new paperScope.Size(totalSize, totalSize);
+
+            // Erstelle das Grid mit Rechtecken
+            for (let i = 0; i < gridSize; i++) { // x-Koordinate
+                for (let j = 0; j < gridSize; j++) { // y-Koordinate
+                    // KORREKTUR: Verwende paperScope zum Erstellen von Objekten
+                    const rect = new paperScope.Rectangle(
+                        new paperScope.Point(i * cellSize, j * cellSize),
+                        new paperScope.Size(cellSize, cellSize)
+                    );
+                    const path = new paperScope.Path.Rectangle(rect);
+                    path.fillColor = null; // Starte transparent (null)
+                    path.strokeColor = showGridLines ? new paperScope.Color('black') : null; // Verwende paperScope.Color oder null
+                    path.strokeWidth = 1;
+
+                    // Speichere Grid-Koordinaten mit dem Pfad
+                    path.gridX = i;
+                    path.gridY = j;
+
+                    // --- Maus-Event-Handler für Pixel ---
+                    path.onMouseDown = function(event) {
+                        event.preventDefault(); // Verhindert Textauswahl/Ziehen
+                        isMouseDown = true;
+                        handlePixelClick(this, event);
+                    };
+
+                    path.onMouseEnter = function(event) {
+                        if (isMouseDown) {
+                            handlePixelClick(this, event, true); // Übergebe 'true' für Ziehen (Drag)
+                        }
+                    };
+
+                     // Füge Pfadobjekt zu unserem Array hinzu
+                     // KORREKTUR: Stelle sicher, dass die Reihenfolge konsistent ist (x dann y)
+                     paths.push({ x: i, y: j, pixel: path });
+                }
+            }
+
+             // --- Globaler Mouse-Up-Handler ---
+            paperScope.view.onMouseUp = () => {
+                if (isMouseDown) {
+                    isMouseDown = false;
+                     lastPaintedCoords = { x: -1, y: -1 }; // Setze letzte gemalte Koordinate bei Mouse Up zurück
+                }
+            };
+
+             // --- Globaler Mouse-Leave-Handler (für den Fall, dass man das Canvas beim Ziehen verlässt) ---
+             paperScope.view.onMouseLeave = () => {
+                 if (isMouseDown) {
+                     isMouseDown = false;
+                     lastPaintedCoords = { x: -1, y: -1 };
+                 }
+             };
+
+            // Verhindere Kontextmenü bei Rechtsklick auf dem Canvas
+            canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+            paperScope.view.draw(); // Initiales Zeichnen
+            console.log("Grid created with size", gridSize, "and cell size", cellSize); // Debugging
+        }
+
+        // --- Pixel-Interaktionslogik ---
+        function handlePixelClick(path, event, isDrag = false) {
+            // KORREKTUR: event.event ist bei Paper.js korrekt, um auf das native Browser-Event zuzugreifen
+            const isLeftClick = event.event.button === 0; // 0 = links, 1 = mitte, 2 = rechts
+            const isRightClick = event.event.button === 2;
+
+             // Vermeide wiederholtes Malen derselben Zelle während einer einzelnen Ziehbewegung
+             // KORREKTUR: Prüfe nur wenn isDrag true ist
+             if (isDrag && path.gridX === lastPaintedCoords.x && path.gridY === lastPaintedCoords.y) {
+                 return;
+             }
+
+             //console.log(`Click Tool: ${currentTool}, Color: ${currColor?.toCSS(true)}, LeftClick: ${isLeftClick}, RightClick: ${isRightClick}`); // Debugging
+
+            switch (currentTool) {
+                case 'draw':
+                    // KORREKTUR: Verwende .clone() für die Farbe, um Objekt-Referenzprobleme zu vermeiden.
+                    // Setze auf null (transparent) bei Rechtsklick zum Radieren.
+                    path.fillColor = isLeftClick ? currColor.clone() : (isRightClick ? null : path.fillColor); // Nur bei Links-/Rechtsklick ändern
+                    break;
+                case 'fill':
+                    if (isLeftClick) { // Fülle nur bei Linksklick
+                         floodFill(path.gridX, path.gridY, currColor);
+                    }
+                    break;
+                 case 'eyedropper':
+                     if (isLeftClick) { // Wähle Farbe nur bei Linksklick
+                         // KORREKTUR: Sicherer Zugriff auf fillColor und Umwandlung in Hex
+                         const pickedColor = path.fillColor ? path.fillColor.toCSS(true) : '#ffffff'; // Standardmäßig weiß, wenn transparent/null
+                         colorPicker.color.hexString = pickedColor; // Aktualisiere Farbwähler
+                         inputColorHex.value = pickedColor; // Aktualisiere Textfeld
+                         // KORREKTUR: Setze currColor auch direkt, da color:change eventuell nicht triggert, wenn die Farbe gleich bleibt
+                         currColor = new paperScope.Color(pickedColor);
+                         setActiveTool('draw'); // Wechsle nach dem Aufnehmen zurück zum Zeichenwerkzeug
+                     }
+                     break;
+            }
+
+             // Aktualisiere letzte gemalte Koordinaten nur, wenn tatsächlich gemalt wurde (im Draw-Modus oder Fill)
+             if (currentTool === 'draw' || (currentTool === 'fill' && isLeftClick)) {
+                 lastPaintedCoords = { x: path.gridX, y: path.gridY };
+             }
+
+             // KORREKTUR: Neuzeichnen ist nach jeder Interaktion sinnvoll
+             paperScope.view.draw();
+        }
+
+        // --- Flood Fill Implementierung (BFS - Breitensuche) ---
+        function floodFill(startX, startY, newColor) {
+            if (!paperScope) return; // Sicherstellen, dass PaperScope existiert
+
+            const targetPath = getPixelPath(startX, startY);
+            if (!targetPath) return; // Sollte innerhalb des Grids nicht passieren
+
+            const targetColor = targetPath.pixel.fillColor; // Kann null sein
+
+            // KORREKTUR: Robuster Vergleich von Farben, auch mit null (transparent)
+            const isNewColorNull = !newColor; // Ist die neue Farbe null?
+            const isTargetColorNull = !targetColor; // Ist die Zielfarbe null?
+
+            // Fall 1: Beide Farben sind null (transparent) -> nichts tun
+            if (isNewColorNull && isTargetColorNull) return;
+            // Fall 2: Beide Farben sind NICHT null und gleich -> nichts tun
+            if (!isNewColorNull && !isTargetColorNull && newColor.equals(targetColor)) return;
+            // Fall 3: Eine ist null, die andere nicht, oder beide sind nicht null, aber ungleich -> Füllen!
+
+            const queue = [{ x: startX, y: startY }];
+            const visited = new Set([`${startX},${startY}`]); // Verhindert Endlosschleifen
+
+             while (queue.length > 0) {
+                const { x, y } = queue.shift();
+                const currentPathObj = getPixelPath(x, y);
+
+                 if (!currentPathObj) continue; // Sicherheitscheck
+
+                // Färbe das aktuelle Pixel
+                // KORREKTUR: Verwende clone() oder null
+                currentPathObj.pixel.fillColor = newColor ? newColor.clone() : null;
+
+                 // Prüfe Nachbarn (oben, unten, links, rechts)
+                const neighbors = [
+                     { nx: x, ny: y - 1 }, { nx: x, ny: y + 1 },
+                     { nx: x - 1, ny: y }, { nx: x + 1, ny: y }
+                 ];
+
+                for (const { nx, ny } of neighbors) {
+                     const neighborKey = `${nx},${ny}`;
+                     // Prüfe Grenzen und ob schon besucht
+                     if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize && !visited.has(neighborKey)) {
+                        const neighborPathObj = getPixelPath(nx, ny);
+                         if (neighborPathObj) {
+                            const neighborColor = neighborPathObj.pixel.fillColor;
+                            const isNeighborColorNull = !neighborColor;
+
+                            // Prüfe, ob die Nachbarfarbe der ursprünglichen Zielfarbe entspricht
+                            let match = false;
+                            if (isTargetColorNull && isNeighborColorNull) { // Beide transparent
+                                match = true;
+                            } else if (!isTargetColorNull && !isNeighborColorNull && targetColor.equals(neighborColor)) { // Beide nicht-transparent und gleich
+                                match = true;
+                            }
+
+                            if (match) {
+                                visited.add(neighborKey);
+                                queue.push({ x: nx, y: ny });
+                            }
+                         }
                      }
                  }
-             }
-        }
-         paperScope.view.draw(); // Redraw after fill is complete
-    }
-
-
-    // Helper to get path object by grid coordinates
-    function getPixelPath(x, y) {
-        // Since paths are stored linearly, calculate the index
-        if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
-            // The original loop added row by row (inner loop j=y, outer loop i=x)
-            // So index is i * gridSize + j  => x * gridSize + y
-            // Correction: Original loop was `for i { for j { ... paths.push({x:i, y:j}) }}`
-            // This means index is `i * gridSize + j` which corresponds to `x * gridSize + y`
-            const index = x * gridSize + y;
-            return paths[index];
-        }
-        return null; // Out of bounds
-    }
-
-
-    // --- Button Actions ---
-    btnUpdateGrid.addEventListener('click', createGrid);
-
-    btnGenerateMatrix.addEventListener('click', () => {
-        let colorsUsed = {};
-        let charCode = 97; // Start labeling colors with 'a'
-
-        // First pass: Assign characters to unique colors
-        paths.forEach(p => {
-            let colorStyle = p.pixel.fillColor ? p.pixel.fillColor.toCSS(true) : 'transparent'; // Use rgba format or 'transparent'
-
-            if (colorStyle === 'rgba(0,0,0,0)' || colorStyle === 'transparent') { // Treat explicit alpha 0 and null as transparent
-                colorStyle = 'transparent';
-            } else if (colorStyle === 'rgb(255,255,255)') { // Treat opaque white separately? Or group with transparent? Let's use '.' for both
-                 colorStyle = 'transparent'; // Group white and transparent for '.'
-             }
-
-             if (colorStyle !== 'transparent' && !colorsUsed[colorStyle]) {
-                 let label = String.fromCharCode(charCode);
-                 colorsUsed[colorStyle] = label;
-                 charCode++;
-             }
-        });
-
-         // Build the color definition part of the output
-        let matrixOutput = "Color Definitions:\n";
-        matrixOutput += Object.entries(colorsUsed)
-            // Extract RGB from rgba(r,g,b,a) or rgb(r,g,b)
-            .map(([color, label]) => `${label} = (${color.match(/\d+/g)?.slice(0, 3).join(',') || 'Error'})`)
-            .join("\n");
-        matrixOutput += "\n\nMatrix:\n";
-
-        // Sort paths by row, then column for correct matrix order
-        paths.sort((a, b) => a.y - b.y || a.x - b.x);
-
-        // Build the matrix grid part of the output
-        for (let j = 0; j < gridSize; j++) { // Iterate rows (y)
-            let row = [];
-            for (let i = 0; i < gridSize; i++) { // Iterate columns (x)
-                 const index = j * gridSize + i; // Correct index calculation for row-major order
-                 const p = paths[index];
-                 let colorStyle = p.pixel.fillColor ? p.pixel.fillColor.toCSS(true) : 'transparent';
-                 let char = '.'; // Default character for transparent/white
-
-                 if (colorStyle === 'rgba(0,0,0,0)' || colorStyle === 'transparent' || colorStyle === 'rgb(255,255,255)') {
-                     char = '.';
-                 } else if (colorsUsed[colorStyle]) {
-                    char = colorsUsed[colorStyle];
-                 }
-                row.push(char);
             }
-            matrixOutput += row.join(", ") + ",\n";
+             paperScope.view.draw(); // Neuzeichnen nach Abschluss des Füllens
         }
-        matrixDiv.textContent = matrixOutput;
-    });
 
-    btnReset.addEventListener('click', () => {
-        paths.forEach(p => {
-            p.pixel.fillColor = null; // Reset to transparent/null
-        });
-        // Reset color picker to white (or another default)
-        colorPicker.color.hexString = '#ffffff';
-        inputColorHex.value = '#ffffff';
-        currColor = new paper.Color('white');
-        matrixDiv.textContent = 'Grid reset. Click "Generate Matrix" again.';
-        paperScope.view.draw();
-    });
-
-    btnBlackify.addEventListener('click', () => {
-        const blackColor = new paper.Color('black');
-        paths.forEach(p => {
-            // Fill if transparent (null) or explicitly white
-            if (!p.pixel.fillColor || p.pixel.fillColor.equals(new paper.Color('white'))) {
-                p.pixel.fillColor = blackColor.clone();
+        // Hilfsfunktion zum Abrufen des Pfadobjekts anhand der Grid-Koordinaten
+        function getPixelPath(x, y) {
+            // KORREKTUR: Indexberechnung basiert darauf, wie die Pfade im `createGrid` hinzugefügt wurden.
+            // Äußere Schleife war `i` (x), innere Schleife war `j` (y).
+            // Der Index für (x, y) ist daher `x * gridSize + y`.
+            if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
+                const index = x * gridSize + y;
+                if (index < paths.length) {
+                  return paths[index];
+                }
             }
-        });
-        paperScope.view.draw();
-    });
+            // console.warn(`getPixelPath: Koordinaten (${x}, ${y}) außerhalb des gültigen Bereichs oder Indexproblem.`);
+            return null; // Außerhalb der Grenzen oder Fehler
+        }
 
-     btnToggleGridlines.addEventListener('click', () => {
-        showGridLines = !showGridLines;
-         paths.forEach(p => {
-             p.pixel.strokeColor = showGridLines ? 'black' : null;
-         });
-         btnToggleGridlines.textContent = showGridLines ? 'Hide Grid Lines' : 'Show Grid Lines';
-          // Add icon back if needed - simple text toggle here
-          btnToggleGridlines.classList.toggle('icon-grid', showGridLines); // Re-add icon class if shown
-          paperScope.view.draw();
-     });
+        // --- Button-Aktionen ---
+        btnUpdateGrid.addEventListener('click', createGrid);
 
-    btnExportPng.addEventListener('click', () => {
-        // Ensure the canvas is fully drawn before exporting
-        paperScope.view.draw();
+        btnGenerateMatrix.addEventListener('click', () => {
+            if (!paperScope) return; // Sicherstellen, dass PaperScope existiert
 
-        // Temporarily disable stroke for cleaner export if grid lines are on
-        const originalStrokeColors = [];
-        if (showGridLines) {
+            let colorsUsed = {};
+            let charCode = 97; // Startet die Farbcodierung mit 'a'
+            const transparentColorString = 'transparent'; // Eindeutiger Bezeichner für Transparenz/Weiß
+            const whiteColor = new paperScope.Color('white');
+
+            // Erster Durchlauf: Weise den einzigartigen Farben Zeichen zu
             paths.forEach(p => {
-                originalStrokeColors.push({ path: p.pixel, color: p.pixel.strokeColor });
-                p.pixel.strokeColor = null;
+                let colorStyle;
+                if (!p.pixel.fillColor || p.pixel.fillColor.equals(whiteColor)) {
+                    colorStyle = transparentColorString; // Behandle null und Weiß als transparent
+                } else {
+                    colorStyle = p.pixel.fillColor.toCSS(true); // Nutze rgba oder rgb Format
+                }
+
+                 if (colorStyle !== transparentColorString && !(colorStyle in colorsUsed)) {
+                     let label = String.fromCharCode(charCode);
+                     // Überspringe problematische Zeichen falls nötig (hier nicht implementiert)
+                     colorsUsed[colorStyle] = label;
+                     charCode++;
+                 }
             });
-            paperScope.view.draw(); // Redraw without lines
-        }
 
+             // Erstelle den Farbdefinitions-Teil der Ausgabe
+            let matrixOutput = "Color Definitions:\n";
+            // KORREKTUR: Extrahiere RGB korrekt aus rgba(r,g,b,a) oder rgb(r,g,b)
+            matrixOutput += Object.entries(colorsUsed)
+                .map(([color, label]) => {
+                    const match = color.match(/(\d+),\s*(\d+),\s*(\d+)/); // Extrahiert r,g,b
+                    const rgb = match ? `${match[1]},${match[2]},${match[3]}` : 'Error';
+                    return `${label} = (${rgb})`;
+                })
+                .join("\n");
+            matrixOutput += "\n\nMatrix:\n";
 
-        const dataURL = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.download = 'pixel-art.png';
-        link.href = dataURL;
-        document.body.appendChild(link); // Required for Firefox
-        link.click();
-        document.body.removeChild(link);
+            // KORREKTUR: Stelle sicher, dass die Matrix korrekt gelesen wird (Reihe für Reihe)
+            // `paths` ist bereits in der Reihenfolge [ (0,0), (0,1), ..., (0,N-1), (1,0), ... ] gespeichert.
+            // Wir müssen also Reihe für Reihe (y) iterieren und für jede Reihe die Spalten (x) durchgehen.
+            for (let j = 0; j < gridSize; j++) { // Iteriere über Reihen (y)
+                let row = [];
+                for (let i = 0; i < gridSize; i++) { // Iteriere über Spalten (x)
+                     // KORREKTUR: Korrekten Pfad für (i, j) bzw. (x, y) holen
+                     const p = getPixelPath(i, j); // Hole Pixel an (x=i, y=j)
+                     if (!p) {
+                         row.push('?'); // Fehlerzeichen, falls Pfad nicht gefunden wird
+                         continue;
+                     }
 
+                     let char = '.'; // Standardzeichen für transparent/weiß
+                     let colorStyle;
+                     if (!p.pixel.fillColor || p.pixel.fillColor.equals(whiteColor)) {
+                         colorStyle = transparentColorString;
+                     } else {
+                         colorStyle = p.pixel.fillColor.toCSS(true);
+                     }
 
-         // Restore stroke colors if they were temporarily removed
-        if (showGridLines && originalStrokeColors.length > 0) {
-            originalStrokeColors.forEach(item => {
-               if(item.path) item.path.strokeColor = item.color;
+                     if (colorStyle !== transparentColorString) {
+                        char = colorsUsed[colorStyle] || '?'; // Verwende zugewiesenes Zeichen oder '?' bei Fehler
+                     }
+                    row.push(char);
+                }
+                // Füge Komma am Ende jeder Zeile hinzu, außer der letzten (optional, aber üblich)
+                matrixOutput += row.join(", ") + (j < gridSize - 1 ? "," : "") + "\n";
+            }
+            matrixDiv.textContent = matrixOutput;
+        });
+
+        btnReset.addEventListener('click', () => {
+            if (!paperScope) return;
+            const whiteColor = new paperScope.Color('white');
+            paths.forEach(p => {
+                p.pixel.fillColor = null; // Setze auf transparent/null zurück
             });
-             paperScope.view.draw(); // Redraw with lines back
-        }
+            // Setze Farbwähler auf Weiß zurück
+            colorPicker.color.hexString = '#ffffff';
+            inputColorHex.value = '#ffffff';
+            currColor = whiteColor; // Setze aktuelle Farbe auf Weiß zurück
+            matrixDiv.textContent = 'Grid reset. Click "Generate Matrix" again.';
+            paperScope.view.draw();
+        });
+
+        btnBlackify.addEventListener('click', () => {
+            if (!paperScope) return;
+            const blackColor = new paperScope.Color('black');
+            const whiteColor = new paperScope.Color('white');
+            paths.forEach(p => {
+                // Fülle, wenn transparent (null) oder explizit weiß
+                if (!p.pixel.fillColor || p.pixel.fillColor.equals(whiteColor)) {
+                    p.pixel.fillColor = blackColor.clone(); // Klonen!
+                }
+            });
+            paperScope.view.draw();
+        });
+
+         btnToggleGridlines.addEventListener('click', () => {
+             if (!paperScope) return;
+             showGridLines = !showGridLines;
+             const stroke = showGridLines ? new paperScope.Color('black') : null;
+             paths.forEach(p => {
+                 p.pixel.strokeColor = stroke;
+             });
+             // KORREKTUR: Button-Text und Icon korrekt aktualisieren
+             btnToggleGridlines.childNodes[1].nodeValue = showGridLines ? ' Hide Grid Lines' : ' Show Grid Lines'; // Ändert nur den Textknoten
+             // Füge Icon-Klasse hinzu/entferne sie basierend auf dem Status
+             btnToggleGridlines.classList.toggle('icon-grid', showGridLines); // Icon anzeigen/verstecken (oder CSS anpassen)
+
+             paperScope.view.draw();
+         });
+
+        btnExportPng.addEventListener('click', () => {
+            if (!paperScope) return;
+            // Stelle sicher, dass das Canvas vollständig gezeichnet ist
+            paperScope.view.draw();
+
+            // Temporär Striche entfernen für sauberen Export, falls Gitterlinien an sind
+            const originalStrokeSettings = [];
+            if (showGridLines) {
+                paths.forEach(p => {
+                    originalStrokeSettings.push({ path: p.pixel, strokeColor: p.pixel.strokeColor, strokeWidth: p.pixel.strokeWidth });
+                    p.pixel.strokeColor = null; // Keine Kontur für den Export
+                });
+                paperScope.view.draw(); // Neuzeichnen ohne Linien
+            }
+
+            // KORREKTUR: Greife auf das Canvas-Element zu, das von Paper.js verwaltet wird
+            const canvasElement = paperScope.view.element;
+            const dataURL = canvasElement.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'pixel-art.png';
+            link.href = dataURL;
+            document.body.appendChild(link); // Nötig für Firefox
+            link.click();
+            document.body.removeChild(link);
+
+             // Stelle Strichfarben wieder her, falls sie temporär entfernt wurden
+            if (showGridLines && originalStrokeSettings.length > 0) {
+                originalStrokeSettings.forEach(item => {
+                   if(item.path) {
+                       item.path.strokeColor = item.strokeColor;
+                       item.path.strokeWidth = item.strokeWidth;
+                   }
+                });
+                 paperScope.view.draw(); // Neuzeichnen mit wiederhergestellten Linien
+            }
+        });
+
+        btnColorInputOk.addEventListener('click', () => {
+            if (!paperScope) return;
+            try {
+                // Prüfe, ob die Eingabe ein gültiger Hex-Code ist (vereinfachte Prüfung)
+                const hexValue = inputColorHex.value.trim();
+                if (/^#([0-9A-F]{3}){1,2}$/i.test(hexValue)) {
+                   colorPicker.color.hexString = hexValue;
+                   // WICHTIG: Da color:change evtl. nicht feuert, wenn die Farbe gleich bleibt,
+                   // setzen wir currColor hier manuell, um Konsistenz sicherzustellen.
+                   currColor = new paperScope.Color(hexValue);
+                } else {
+                    throw new Error("Invalid hex format");
+                }
+            } catch (e) {
+                console.error("Invalid color input:", inputColorHex.value, e);
+                alert("Invalid color format. Please use #rrggbb or #rgb.");
+            }
+        });
+        // Erlaube das Setzen der Farbe durch Drücken von Enter im Eingabefeld
+        inputColorHex.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Verhindert Formular-Submit, falls vorhanden
+                btnColorInputOk.click(); // Löst die Aktion des OK-Buttons aus
+            }
+        });
+
+        // --- Initiales Setup ---
+        inputGridSize.value = gridSize;
+        inputCellSize.value = cellSize;
+        setActiveTool('draw'); // Setze initiales Werkzeug
+        createGrid(); // Erstelle das initiale Grid
+        console.log("Initial setup complete. PaperScope:", paperScope); // Debugging
     });
-
-
-    btnColorInputOk.addEventListener('click', () => {
-        try {
-            colorPicker.color.hexString = inputColorHex.value;
-        } catch (e) {
-            console.error("Invalid color input:", inputColorHex.value);
-            alert("Invalid color format. Please use #rrggbb or a valid color name.");
-        }
-    });
-    // Allow setting color by pressing Enter in the input field
-    inputColorHex.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault(); // Prevent form submission if it were in a form
-            btnColorInputOk.click(); // Trigger the OK button's action
-        }
-    });
-
-
-    // --- Initial Setup ---
-    inputGridSize.value = gridSize;
-    inputCellSize.value = cellSize;
-    setActiveTool('draw'); // Set initial tool
-    createGrid(); // Create the initial grid
-
   </script>
 </body>
 </html>

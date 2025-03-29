@@ -8,7 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
   <style>
-    /* CSS bleibt unverändert - siehe vorherige Antwort */
+    /* CSS bleibt unverändert */
     :root {
       --primary-color: #4a90e2;
       --secondary-color: #f5f5f5;
@@ -221,7 +221,7 @@
       <fieldset class="control-group">
         <legend>Color</legend>
         <div id="color-picker-container">
-          <div id="color-picker"></div>
+          <div id="color-picker"></div> <!-- Wird von iro.js gefüllt -->
         </div>
          <div class="color-input-group">
             <input type="text" id="color-input" placeholder="#rrggbb">
@@ -229,7 +229,7 @@
          </div>
         <div>
           <input type="checkbox" id="changeforall" style="vertical-align: middle;">
-          <label for="changeforall">Apply to all non-white/transparent pixels</label> <!-- Klärung -->
+          <label for="changeforall">Apply to all non-white/transparent pixels</label>
         </div>
       </fieldset>
 
@@ -262,8 +262,11 @@
   </div>
 
   <script>
+    // Warten bis DOM geladen ist
     document.addEventListener('DOMContentLoaded', () => {
+        console.log("DOM Loaded. Initializing Pixel Editor...");
 
+        // --- Elemente holen ---
         const canvas = document.getElementById("cv");
         const matrixDiv = document.getElementById("matrix");
         const btnGenerateMatrix = document.getElementById("done");
@@ -281,214 +284,225 @@
         const toolFillBtn = document.getElementById('tool-fill');
         const toolEyedropperBtn = document.getElementById('tool-eyedropper');
         const currentToolDisplay = document.getElementById('current-tool-display');
-        const colorPickerContainer = document.getElementById('color-picker');
+        const colorPickerContainer = document.getElementById('color-picker'); // Nur der Container
 
-        let paperScope;
-        let paths = [];
+        // --- Globale Zustandsvariablen ---
+        let paperScope; // Der Paper.js Kontext
+        let paths = []; // Array für {x, y, pixel: paper.Path}
         let gridSize = 8;
         let cellSize = 30;
-        let currColor; // Wird in createGrid initialisiert
+        let currColor; // Die aktuell ausgewählte paper.Color
         let isMouseDown = false;
         let lastPaintedCoords = { x: -1, y: -1 };
         let showGridLines = true;
         let currentTool = 'draw';
-        let whiteColor; // Wird in createGrid initialisiert für Vergleiche
-        let blackColor; // Wird in createGrid initialisiert
+        let whiteColor; // Referenz auf paper.Color('white')
+        let blackColor; // Referenz auf paper.Color('black')
+        const TRANSPARENT_KEY = '__TRANSPARENT__'; // Schlüssel für Mapping
 
-        // Konstante für den Schlüssel von transparenten/weißen Pixeln im Mapping
-        const TRANSPARENT_KEY = '__TRANSPARENT__';
-
-        const colorPicker = new iro.ColorPicker(colorPickerContainer, {
-            width: 200,
-            color: "#ffffff",
-            borderWidth: 1,
-            borderColor: "#ccc",
-            layout: [
-                { component: iro.ui.Wheel },
-                { component: iro.ui.Box },
-                { component: iro.ui.Slider, options: { sliderType: 'hue' } },
-                { component: iro.ui.Slider, options: { sliderType: 'saturation' } },
-                { component: iro.ui.Slider, options: { sliderType: 'value' } },
-            ]
-        });
-
-        colorPicker.on('color:change', (color) => {
-          if (!paperScope) return;
-          const newColor = new paperScope.Color(color.hexString);
-
-          if (!currColor || !currColor.equals(newColor)) {
-                // console.log("Color changed via picker. Old:", currColor?.toCSS(), "New:", newColor.toCSS());
-                currColor = newColor; // Globale Farbe aktualisieren
-                inputColorHex.value = currColor.toHex(); // Hex im Inputfeld bevorzugen
-
-                if (inputChangeAll.checked && paths.length > 0) {
-                    // console.log("Applying color change to all non-white pixels");
-                    paths.forEach(p => {
-                        // Ändere nur Pixel, die NICHT null (transparent) UND NICHT weiß sind
-                        if (p.pixel.fillColor && !p.pixel.fillColor.equals(whiteColor)) {
-                             p.pixel.fillColor = currColor.clone();
-                        }
-                     });
-                     paperScope.view.draw();
-                }
-          }
-        });
-
-        function setActiveTool(toolName) {
-            currentTool = toolName;
-            currentToolDisplay.textContent = toolName.charAt(0).toUpperCase() + toolName.slice(1);
-            document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
-            const activeBtn = document.getElementById(`tool-${toolName}`);
-            if (activeBtn) activeBtn.classList.add('active');
-
-            canvas.classList.remove('eyedropper-cursor', 'fill-cursor');
-            if (toolName === 'eyedropper') canvas.classList.add('eyedropper-cursor');
-            else if (toolName === 'fill') canvas.classList.add('fill-cursor');
-            // else Standard (crosshair via CSS)
-            // console.log("Active tool:", currentTool);
+        // --- Color Picker Initialisierung (iro.js) ---
+        // WICHTIG: Sicherstellen, dass dies nicht fehlschlägt.
+        let colorPickerInstance;
+        try {
+             colorPickerInstance = new iro.ColorPicker(colorPickerContainer, {
+                width: 200,
+                color: "#ffffff", // Start mit Weiß
+                borderWidth: 1,
+                borderColor: "#ccc",
+                layout: [
+                    { component: iro.ui.Wheel },
+                    { component: iro.ui.Box },
+                    { component: iro.ui.Slider, options: { sliderType: 'hue' } },
+                    { component: iro.ui.Slider, options: { sliderType: 'saturation' } },
+                    { component: iro.ui.Slider, options: { sliderType: 'value' } },
+                ]
+            });
+            console.log("iro.js Color Picker initialized.");
+        } catch (error) {
+            console.error("FATAL: Failed to initialize iro.js Color Picker!", error);
+            alert("Error initializing color picker. Please check console.");
+            return; // Abbruch, wenn der Picker nicht geht
         }
 
-        toolDrawBtn.addEventListener('click', () => setActiveTool('draw'));
-        toolFillBtn.addEventListener('click', () => setActiveTool('fill'));
-        toolEyedropperBtn.addEventListener('click', () => setActiveTool('eyedropper'));
+        // --- Hauptfunktionen ---
 
+        // Grid erstellen / neu erstellen
         function createGrid() {
-            if (paperScope && paperScope.project) {
-                paperScope.project.clear();
-            }
-
-            paperScope = new paper.PaperScope();
-            paperScope.setup(canvas);
-
-            // Initialisiere Farben nach paperScope Setup
-            whiteColor = new paperScope.Color('white');
-            blackColor = new paperScope.Color('black');
-            // Setze Startfarbe und synchronisiere Picker und Input
-            currColor = new paperScope.Color(colorPicker.color.hexString);
-            inputColorHex.value = currColor.toHex();
-
-            paths = [];
-            gridSize = parseInt(inputGridSize.value) || 8;
-            cellSize = parseInt(inputCellSize.value) || 30;
-            const totalSize = gridSize * cellSize;
-            canvas.width = totalSize;
-            canvas.height = totalSize;
-            paperScope.view.viewSize = new paperScope.Size(totalSize, totalSize);
-
-            const strokeColor = showGridLines ? blackColor : null;
-
-            for (let i = 0; i < gridSize; i++) { // Spalte (x)
-                for (let j = 0; j < gridSize; j++) { // Reihe (y)
-                    const rect = new paperScope.Rectangle(i * cellSize, j * cellSize, cellSize, cellSize);
-                    const path = new paperScope.Path.Rectangle(rect);
-                    path.fillColor = null; // <<< Wichtig: Start als null (transparent)
-                    path.strokeColor = strokeColor ? strokeColor.clone() : null; // Klonen oder null
-                    path.strokeWidth = 1;
-                    path.gridX = i;
-                    path.gridY = j;
-
-                    path.onMouseDown = function(event) {
-                        event.preventDefault();
-                        isMouseDown = true;
-                        handlePixelClick(this, event);
-                    };
-                    path.onMouseEnter = function(event) {
-                        if (isMouseDown) {
-                            handlePixelClick(this, event, true);
-                        }
-                    };
-                    // Korrekte Reihenfolge für Index: x * gridSize + y
-                    paths[i * gridSize + j] = { x: i, y: j, pixel: path };
+            console.log("Attempting to create grid...");
+            try {
+                // Altes Projekt bereinigen
+                if (paperScope && paperScope.project) {
+                    paperScope.project.clear();
+                    console.log("Cleared previous paper project.");
                 }
-            }
 
-            paperScope.view.onMouseUp = () => {
-                if (isMouseDown) {
-                    isMouseDown = false;
-                    lastPaintedCoords = { x: -1, y: -1 };
+                // Neuen Paper.js Scope aufsetzen
+                paperScope = new paper.PaperScope();
+                paperScope.setup(canvas);
+                console.log("paperScope setup complete on canvas.");
+
+                // Wichtige Farben initialisieren *nach* setup
+                whiteColor = new paperScope.Color('white');
+                blackColor = new paperScope.Color('black');
+                // Startfarbe setzen (explizit weiß) und UI synchronisieren
+                currColor = whiteColor.clone(); // Sicherstellen, dass es ein Klon ist
+                colorPickerInstance.color.hexString = currColor.toHex();
+                inputColorHex.value = currColor.toHex();
+                console.log("Initialized base colors (white, black) and set current color to white.");
+
+                // Grid-Parameter holen
+                paths = []; // Array leeren
+                gridSize = parseInt(inputGridSize.value, 10) || 8; // Basis 10 und Fallback
+                cellSize = parseInt(inputCellSize.value, 10) || 30;
+                const totalSize = gridSize * cellSize;
+                if (totalSize <= 0) {
+                   throw new Error(`Invalid grid dimensions: Size=${gridSize}, Cell=${cellSize}`);
                 }
-            };
-            paperScope.view.onMouseLeave = () => { // Verhindert "hängendes" Malen
-                 if (isMouseDown) {
-                     isMouseDown = false;
-                     lastPaintedCoords = { x: -1, y: -1 };
-                 }
-             };
+                canvas.width = totalSize;
+                canvas.height = totalSize;
+                paperScope.view.viewSize = new paperScope.Size(totalSize, totalSize);
+                console.log(`Grid dimensions set: ${gridSize}x${gridSize}, Cell: ${cellSize}px, Total: ${totalSize}px`);
 
-            canvas.addEventListener('contextmenu', e => e.preventDefault());
-            paperScope.view.draw();
-            console.log(`Grid created: ${gridSize}x${gridSize}, Cell: ${cellSize}px. Initial color: ${currColor.toCSS()}`);
+                // Pfade erstellen
+                const strokeColor = showGridLines ? blackColor : null;
+                console.log(`Creating paths... Stroke active: ${showGridLines}`);
+                for (let i = 0; i < gridSize; i++) { // Spalte (x)
+                    for (let j = 0; j < gridSize; j++) { // Reihe (y)
+                        const rect = new paperScope.Rectangle(i * cellSize, j * cellSize, cellSize, cellSize);
+                        const path = new paperScope.Path.Rectangle(rect);
+
+                        path.fillColor = null; // Start transparent
+                        path.strokeColor = strokeColor ? strokeColor.clone() : null; // Klon oder null
+                        path.strokeWidth = 1;
+                        path.gridX = i;
+                        path.gridY = j;
+
+                        // Event Listeners für diesen Pfad
+                        path.onMouseDown = function(event) {
+                            event.preventDefault();
+                            isMouseDown = true;
+                            handlePixelClick(this, event); // 'this' ist der geklickte Path
+                        };
+                        path.onMouseEnter = function(event) {
+                            if (isMouseDown) {
+                                handlePixelClick(this, event, true); // 'this' ist der Path
+                            }
+                        };
+
+                        // Pfad speichern (Index = x * gridSize + y)
+                        paths[i * gridSize + j] = { x: i, y: j, pixel: path };
+                    }
+                }
+                console.log(`Created ${paths.length} paths.`);
+
+                // Globale Maus-Events für den View
+                paperScope.view.onMouseUp = () => {
+                    if (isMouseDown) {
+                        isMouseDown = false;
+                        lastPaintedCoords = { x: -1, y: -1 };
+                    }
+                };
+                paperScope.view.onMouseLeave = () => {
+                     if (isMouseDown) {
+                         isMouseDown = false;
+                         lastPaintedCoords = { x: -1, y: -1 };
+                     }
+                 };
+
+                // Kontextmenü verhindern
+                canvas.removeEventListener('contextmenu', preventContextMenu); // Erst entfernen, falls schon vorhanden
+                canvas.addEventListener('contextmenu', preventContextMenu);
+
+                // Alles zeichnen
+                paperScope.view.draw();
+                console.log("Grid creation complete. Initial draw performed.");
+
+            } catch (error) {
+                console.error("FATAL ERROR during createGrid:", error);
+                alert("Failed to create grid. Check console for details. Error: " + error.message);
+                // Hier könnten wir versuchen, die UI zu deaktivieren oder eine Meldung anzuzeigen
+            }
         }
 
+        // Hilfsfunktion, um Kontextmenü zu verhindern
+        function preventContextMenu(e) {
+            e.preventDefault();
+        }
+
+        // Pixel-Klick/Drag-Handler
         function handlePixelClick(path, event, isDrag = false) {
+           // console.log("handlePixelClick called"); // Test, ob Funktion erreicht wird
+            // Sicherheitscheck: Ist paperScope noch gültig?
+             if (!paperScope || !path || !currColor || !whiteColor) {
+                console.error("handlePixelClick: Missing critical variable (paperScope, path, currColor, or whiteColor). Aborting.");
+                return;
+            }
+
             const isLeftClick = event.event.button === 0;
             const isRightClick = event.event.button === 2;
 
             if (isDrag && path.gridX === lastPaintedCoords.x && path.gridY === lastPaintedCoords.y) {
-                 return; // Vermeide unnötiges Neuzeichnen derselben Zelle beim Ziehen
+                 return; // Nichts zu tun
             }
-            // console.log(`Click: Tool=${currentTool}, L=${isLeftClick}, R=${isRightClick}, Color=${currColor.toCSS()}, Target=(${path.gridX},${path.gridY}), CurrentFill=${path.fillColor?.toCSS()}`); // Debug
+            // console.log(`Click: Tool=${currentTool}, L=${isLeftClick}, R=${isRightClick}, Color=${currColor.toCSS()}, Target=(${path.gridX},${path.gridY}), CurrentFill=${path.fillColor?.toCSS()}`);
 
             let redrawNeeded = false;
 
-            switch (currentTool) {
-                case 'draw':
-                    if (isLeftClick) {
-                        // Male nur, wenn die neue Farbe anders ist als die aktuelle
-                        if (!path.fillColor || !path.fillColor.equals(currColor)) {
-                           path.fillColor = currColor.clone();
-                           redrawNeeded = true;
-                        //    console.log(`Draw: Set pixel (${path.gridX},${path.gridY}) to ${currColor.toCSS()}`);
+            try { // Füge try-catch hinzu, um Fehler hier abzufangen
+                switch (currentTool) {
+                    case 'draw':
+                        if (isLeftClick) {
+                            if (!path.fillColor || !path.fillColor.equals(currColor)) {
+                               path.fillColor = currColor.clone(); // Klonen!
+                               redrawNeeded = true;
+                            }
+                        } else if (isRightClick) {
+                            if (path.fillColor !== null) { // Nur wenn nicht schon transparent
+                               path.fillColor = null;
+                               redrawNeeded = true;
+                            }
                         }
-                    } else if (isRightClick) {
-                        // Radiere nur, wenn der Pixel nicht bereits transparent ist
-                        if (path.fillColor !== null) {
-                           path.fillColor = null; // Radieren (transparent)
-                           redrawNeeded = true;
-                        //    console.log(`Erase: Set pixel (${path.gridX},${path.gridY}) to null`);
+                        break;
+                    case 'fill':
+                        if (isLeftClick) {
+                             floodFill(path.gridX, path.gridY, currColor); // floodFill macht eigenes draw
+                             redrawNeeded = false; // Verhindert doppeltes Zeichnen
                         }
-                    }
-                    break;
-                case 'fill':
-                    if (isLeftClick) {
-                         // floodFill behandelt Neuzeichnen intern
-                         floodFill(path.gridX, path.gridY, currColor);
-                         redrawNeeded = false; // Wird von floodFill übernommen
-                    }
-                    break;
-                 case 'eyedropper':
-                     if (isLeftClick) {
-                         const pickedColorObj = path.fillColor || whiteColor; // Nimm Weiß, wenn transparent
-                         // console.log(`Eyedropper: Picked ${pickedColorObj.toCSS()} from (${path.gridX},${path.gridY})`);
-                         colorPicker.color.hexString = pickedColorObj.toHex(); // Update Picker
-                         inputColorHex.value = pickedColorObj.toHex();       // Update Input
-                         currColor = pickedColorObj.clone();                 // Update globale Farbe direkt
-                         setActiveTool('draw'); // Wechsle zurück
-                         // Kein Neuzeichnen nötig, nur UI-Update
-                     }
-                     break;
+                        break;
+                     case 'eyedropper':
+                         if (isLeftClick) {
+                             const pickedColorObj = path.fillColor ? path.fillColor.clone() : whiteColor.clone(); // Klonen!
+                             console.log(`Eyedropper: Picked ${pickedColorObj.toCSS()}`);
+                             colorPickerInstance.color.hexString = pickedColorObj.toHex();
+                             inputColorHex.value = pickedColorObj.toHex();
+                             currColor = pickedColorObj; // Objekt direkt übernehmen (ist schon Klon)
+                             setActiveTool('draw'); // Zurück zum Zeichnen
+                         }
+                         break;
+                }
+            } catch (error) {
+                 console.error("Error during handlePixelClick action:", error);
             }
 
-             // Aktualisiere letzte Koordinate *nach* der Aktion
-             lastPaintedCoords = { x: path.gridX, y: path.gridY };
-             if (redrawNeeded) {
-                 paperScope.view.draw(); // Zeichne nur neu, wenn nötig
-             }
+            lastPaintedCoords = { x: path.gridX, y: path.gridY };
+            if (redrawNeeded) {
+                paperScope.view.draw(); // Nur zeichnen, wenn nötig
+            }
         }
 
+        // Flood Fill (unverändert zur letzten Version, aber mit Checks)
         function floodFill(startX, startY, newColor) {
+             if (!paperScope) { console.error("floodFill: paperScope missing."); return; }
+
             const targetPathObj = getPixelPath(startX, startY);
-            if (!targetPathObj) return;
+            if (!targetPathObj) { console.error(`floodFill: Path at (${startX}, ${startY}) not found.`); return; }
 
             const targetColor = targetPathObj.pixel.fillColor; // Kann null sein
-
-            // Ist die Zielfarbe = neue Farbe? (Behandle null korrekt)
             const isNewColorNull = !newColor;
             const isTargetColorNull = !targetColor;
-            if (isNewColorNull && isTargetColorNull) return; // null -> null
-            if (!isNewColorNull && !isTargetColorNull && newColor.equals(targetColor)) return; // color -> same color
 
-            // console.log(`Flood Fill: Start (${startX},${startY}), Target: ${targetColor?.toCSS()}, New: ${newColor?.toCSS()}`);
+            if (isNewColorNull && isTargetColorNull) return;
+            if (!isNewColorNull && !isTargetColorNull && newColor.equals(targetColor)) return;
 
             const queue = [{ x: startX, y: startY }];
             const visited = new Set([`${startX},${startY}`]);
@@ -499,7 +513,6 @@
                 const currentPathObj = getPixelPath(x, y);
                 if (!currentPathObj) continue;
 
-                // Setze die neue Farbe (Klon oder null)
                 currentPathObj.pixel.fillColor = newColor ? newColor.clone() : null;
                 pixelsChanged++;
 
@@ -513,8 +526,8 @@
                             const neighborColor = neighborPathObj.pixel.fillColor;
                             const isNeighborColorNull = !neighborColor;
                             let match = false;
-                            if (isTargetColorNull && isNeighborColorNull) match = true; // Beide transparent
-                            else if (!isTargetColorNull && !isNeighborColorNull && targetColor.equals(neighborColor)) match = true; // Beide gleiche Farbe
+                            if (isTargetColorNull && isNeighborColorNull) match = true;
+                            else if (!isTargetColorNull && !isNeighborColorNull && targetColor.equals(neighborColor)) match = true;
 
                             if (match) {
                                 visited.add(neighborKey);
@@ -524,32 +537,42 @@
                      }
                  }
             }
-
             if (pixelsChanged > 0) {
-                // console.log(`Flood Fill: Changed ${pixelsChanged} pixels.`);
                 paperScope.view.draw();
             }
         }
 
-        // Hilfsfunktion: Holt das Pfad-Objekt {x, y, pixel} für gegebene Grid-Koordinaten
+        // Hilfsfunktion: Pixelpfad holen (unverändert)
         function getPixelPath(x, y) {
             if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
-                // Indexberechnung: Spaltenweise gefüllt (äußere Schleife x, innere y)
                 const index = x * gridSize + y;
-                if (index < paths.length) {
+                if (index < paths.length && paths[index]) { // Zusätzlicher Check auf Existenz
                   return paths[index];
                 }
             }
-            console.warn(`getPixelPath: Invalid coords (${x}, ${y}) or index out of bounds.`);
+            // console.warn(`getPixelPath: Path not found for (${x}, ${y})`); // Weniger aggressives Logging
             return null;
         }
 
-        // --- Button Actions ---
-        btnUpdateGrid.addEventListener('click', createGrid);
+        // Werkzeug aktivieren (unverändert)
+        function setActiveTool(toolName) {
+            currentTool = toolName;
+            currentToolDisplay.textContent = toolName.charAt(0).toUpperCase() + toolName.slice(1);
+            document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById(`tool-${toolName}`);
+            if (activeBtn) activeBtn.classList.add('active');
 
-               btnGenerateMatrix.addEventListener('click', () => {
-            if (!paperScope || paths.length === 0) {
-                matrixDiv.textContent = "Grid is not initialized.";
+            canvas.classList.remove('eyedropper-cursor', 'fill-cursor');
+            if (toolName === 'eyedropper') canvas.classList.add('eyedropper-cursor');
+            else if (toolName === 'fill') canvas.classList.add('fill-cursor');
+        }
+
+        // Matrix generieren (letzte korrekte Version)
+        function generateMatrix() {
+            // Verwende die letzte korrigierte Version dieser Funktion
+            if (!paperScope || !paths || paths.length === 0 || !whiteColor) {
+                matrixDiv.textContent = "Grid/State not properly initialized.";
+                console.error("generateMatrix: Missing prerequisites (paperScope, paths, whiteColor).");
                 return;
             }
             console.log("Generating Matrix...");
@@ -557,89 +580,77 @@
             let colorMap = {}; // Map: Farb-Schlüssel (Hex oder TRANSPARENT_KEY) -> Zeichen { key: char }
             let colorDefinitions = {}; // Map: Farb-Schlüssel -> RGB-Array { key: [r, g, b] }
             let charCode = 97; // 'a'
-            const whiteHex = whiteColor.toHex(); // Hex für Weiß für einfachen Vergleich
+            const whiteHex = whiteColor.toHex();
 
-            // 1. Durchlauf: Finde alle einzigartigen Farben (außer weiß/transparent) und weise Zeichen zu
-            paths.forEach(p => {
+            paths.forEach(p => { // Gehe jeden gespeicherten Pfad durch
+                if (!p || !p.pixel) return; // Sicherheitscheck
                 const color = p.pixel.fillColor;
                 let key;
                 let isRealColor = false;
 
-                // Bestimme den Schlüssel für die Farbe
                 if (color) {
-                    key = color.toHex(); // Benutze Hex als Schlüssel
-                    if (key !== whiteHex) { // Nur Farben, die nicht weiß sind
+                    key = color.toHex();
+                    if (key !== whiteHex) {
                         isRealColor = true;
                     } else {
-                        key = TRANSPARENT_KEY; // Behandle weiß wie transparent
+                        key = TRANSPARENT_KEY; // Weiß wird wie transparent behandelt
                     }
                 } else {
-                    // Pixel ist transparent (null)
-                    key = TRANSPARENT_KEY;
+                    key = TRANSPARENT_KEY; // null ist transparent
                 }
 
-                // Wenn es eine neue "echte" Farbe ist, füge sie zur Map hinzu
                 if (isRealColor && !(key in colorMap)) {
                     const char = String.fromCharCode(charCode++);
                     colorMap[key] = char;
-                    // *** KORREKTUR SICHERSTELLEN: Speichere das RGB-Array ***
-                    colorDefinitions[key] = [
-                        Math.round(color.red * 255),
-                        Math.round(color.green * 255),
-                        Math.round(color.blue * 255)
-                    ];
-                     console.log(`Mapped color ${key} to char '${char}' (RGB: ${colorDefinitions[key]})`);
+                    try { // Sicherstellen, dass Farbkonvertierung klappt
+                       colorDefinitions[key] = [
+                            Math.round(color.red * 255),
+                            Math.round(color.green * 255),
+                            Math.round(color.blue * 255)
+                        ];
+                    } catch(e) {
+                         console.error(`Error converting color ${key} to RGB`, e);
+                         colorDefinitions[key] = null; // Mark as error
+                    }
+                    // console.log(`Mapped color ${key} to char '${char}' (RGB: ${colorDefinitions[key]})`);
                 }
             });
 
-            // 2. Baue den Output-String
             let matrixOutput = "Color Definitions:\n";
-            // Füge Definitionen für die gefundenen Farben hinzu
-            for (const key in colorMap) { // Iteriere über die Schlüssel der gefundenen Farben
-                if (key !== TRANSPARENT_KEY) { // Überspringe den Transparent-Schlüssel
+            for (const key in colorMap) {
+                if (key !== TRANSPARENT_KEY) {
                     const char = colorMap[key];
-                    // *** KORREKTUR & VALIDIERUNG: Hole RGB-Array und prüfe es ***
-                    const rgb = colorDefinitions[key];
+                    const rgb = colorDefinitions[key]; // Hole das RGB Array
                     if (rgb && Array.isArray(rgb) && rgb.length === 3) {
-                        // *** KORREKTUR: Benutze join(',') für die Ausgabe ***
                         matrixOutput += `${char} = (${rgb.join(',')}) - ${key}\n`;
                     } else {
-                        // Fallback, falls etwas schiefging
-                        console.error(`Error retrieving/validating RGB for key: ${key}. Found:`, rgb);
-                        matrixOutput += `${char} = (Error retrieving RGB) - ${key}\n`;
+                         matrixOutput += `${char} = (Error retrieving RGB) - ${key}\n`; // Fehler ausgeben
                     }
                 }
             }
             matrixOutput += "\nMatrix:\n";
 
-            // 3. Gehe durch das Grid Reihe für Reihe und generiere die Matrix-Zeichen
             for (let j = 0; j < gridSize; j++) { // Reihen (y)
                 let rowChars = [];
                 for (let i = 0; i < gridSize; i++) { // Spalten (x)
-                    const pathObj = getPixelPath(i, j); // Pixel bei (x=i, y=j) holen
-                    let char = '.'; // Standard für weiß/transparent
-                    let key = TRANSPARENT_KEY; // Standard-Schlüssel
+                    const pathObj = getPixelPath(i, j);
+                    let char = '.'; // Standard
+                    let key = TRANSPARENT_KEY;
 
-                    if (pathObj && pathObj.pixel.fillColor) {
+                    if (pathObj && pathObj.pixel && pathObj.pixel.fillColor) {
                         const currentHex = pathObj.pixel.fillColor.toHex();
                         if (currentHex !== whiteHex) {
-                            // Es ist eine "echte" Farbe (nicht null, nicht weiß)
-                            key = currentHex;
+                            key = currentHex; // Es ist eine "echte" Farbe
                         }
-                        // Wenn es weiß ist, bleibt key = TRANSPARENT_KEY
+                        // Wenn weiß, bleibt key TRANSPARENT_KEY
                     }
-                    // Wenn es null war, bleibt key = TRANSPARENT_KEY
+                     // Wenn null, bleibt key TRANSPARENT_KEY
 
-                    // Wenn der Schlüssel einer gemappten Farbe entspricht, benutze das Zeichen
                     if (key !== TRANSPARENT_KEY && key in colorMap) {
-                        char = colorMap[key];
+                        char = colorMap[key]; // Zeichen holen
                     } else if (key !== TRANSPARENT_KEY) {
-                        // Farbe wurde aus irgendeinem Grund nicht gemappt (sollte nicht passieren)
-                        console.warn(`Matrix Generation: Color ${key} at (${i},${j}) not found in colorMap!`);
-                        char = '?';
+                        char = '?'; // Farbe nicht gemappt? Fehler.
                     }
-                    // Wenn key == TRANSPARENT_KEY, bleibt char '.'
-
                     rowChars.push(char);
                 }
                 matrixOutput += rowChars.join(", ") + (j < gridSize - 1 ? "," : "") + "\n";
@@ -647,97 +658,136 @@
 
             matrixDiv.textContent = matrixOutput;
             console.log("Matrix generation complete.");
+        }
+
+
+        // --- Event Listener für Buttons und Inputs ---
+
+        // Color Picker Event
+        colorPickerInstance.on('color:change', (color) => {
+          if (!paperScope || !currColor) return; // Nur wenn alles initialisiert ist
+          const newColor = new paperScope.Color(color.hexString);
+
+          if (!currColor.equals(newColor)) { // Nur wenn Farbe sich *wirklich* ändert
+                // console.log("Picker changed color to:", newColor.toCSS());
+                currColor = newColor;
+                inputColorHex.value = currColor.toHex();
+
+                // "Change for all" Logik
+                if (inputChangeAll.checked && paths.length > 0 && whiteColor) {
+                    paths.forEach(p => {
+                        if (p && p.pixel && p.pixel.fillColor && !p.pixel.fillColor.equals(whiteColor)) {
+                             p.pixel.fillColor = currColor.clone();
+                        }
+                     });
+                     paperScope.view.draw();
+                }
+          }
         });
 
+        // Button: Update Grid
+        btnUpdateGrid.addEventListener('click', createGrid); // Ruft die Hauptfunktion auf
+
+        // Button: Generate Matrix
+        btnGenerateMatrix.addEventListener('click', generateMatrix); // Ruft die separate Funktion auf
+
+        // Button: Reset Grid
         btnReset.addEventListener('click', () => {
-            if (!paperScope) return;
+            if (!paperScope || !paths || !whiteColor) return;
             console.log("Resetting grid.");
-            paths.forEach(p => {
-                p.pixel.fillColor = null;
-            });
-            colorPicker.color.hexString = '#ffffff';
+            paths.forEach(p => { if (p && p.pixel) p.pixel.fillColor = null; });
+            colorPickerInstance.color.hexString = '#ffffff';
             inputColorHex.value = '#ffffff';
             currColor = whiteColor.clone();
             matrixDiv.textContent = 'Grid reset. Click "Generate Matrix" again.';
             paperScope.view.draw();
         });
 
+        // Button: Blackify
         btnBlackify.addEventListener('click', () => {
-            if (!paperScope) return;
+            if (!paperScope || !paths || !whiteColor || !blackColor) return;
             console.log("Blackifying blank/white pixels.");
             let changed = 0;
             paths.forEach(p => {
-                if (!p.pixel.fillColor || p.pixel.fillColor.equals(whiteColor)) {
+                if (p && p.pixel && (!p.pixel.fillColor || p.pixel.fillColor.equals(whiteColor))) {
                     p.pixel.fillColor = blackColor.clone();
                     changed++;
                 }
             });
             if (changed > 0) paperScope.view.draw();
-            console.log(`Blackified ${changed} pixels.`);
         });
 
+        // Button: Toggle Gridlines
          btnToggleGridlines.addEventListener('click', () => {
-             if (!paperScope) return;
+             if (!paperScope || !paths || !blackColor) return;
              showGridLines = !showGridLines;
              const stroke = showGridLines ? blackColor : null;
              paths.forEach(p => {
-                 // Klonen der Farbe ist sicherer, falls strokeColor modifiziert wird
-                 p.pixel.strokeColor = stroke ? stroke.clone() : null;
+                 if (p && p.pixel) p.pixel.strokeColor = stroke ? stroke.clone() : null;
              });
-             // Aktualisiere Button Text und Icon Zustand
              const textNode = Array.from(btnToggleGridlines.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
              if(textNode) textNode.nodeValue = showGridLines ? ' Hide Grid Lines' : ' Show Grid Lines';
              btnToggleGridlines.classList.toggle('icon-grid', showGridLines);
-
              paperScope.view.draw();
-             console.log("Toggled grid lines visibility to:", showGridLines);
          });
 
+        // Button: Export PNG
         btnExportPng.addEventListener('click', () => {
-            if (!paperScope) return;
+             if (!paperScope || !paperScope.view || !paperScope.view.element) {
+                 console.error("Export PNG: PaperScope or view not ready.");
+                 return;
+             }
             console.log("Exporting as PNG...");
-            paperScope.view.draw(); // Sicherstellen, dass alles gezeichnet ist
+            paperScope.view.draw(); // Sicherstellen, dass alles aktuell ist
 
             const originalStrokes = [];
-            if (showGridLines) { // Temporär Linien entfernen
+            let strokesChanged = false;
+            if (showGridLines) {
                 paths.forEach(p => {
-                    originalStrokes.push({ path: p.pixel, strokeColor: p.pixel.strokeColor, strokeWidth: p.pixel.strokeWidth });
-                    p.pixel.strokeColor = null;
+                   if (p && p.pixel && p.pixel.strokeColor) {
+                     originalStrokes.push({ path: p.pixel, strokeColor: p.pixel.strokeColor, strokeWidth: p.pixel.strokeWidth });
+                     p.pixel.strokeColor = null;
+                     strokesChanged = true;
+                   }
                 });
-                paperScope.view.draw();
+                if (strokesChanged) paperScope.view.draw(); // Neuzeichnen ohne Linien
             }
 
-            const canvasElement = paperScope.view.element;
-            const dataURL = canvasElement.toDataURL('image/png');
-            const link = document.createElement('a');
-            link.download = 'pixel-art.png';
-            link.href = dataURL;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            console.log("PNG export initiated.");
+            try {
+                const canvasElement = paperScope.view.element;
+                const dataURL = canvasElement.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = 'pixel-art.png';
+                link.href = dataURL;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (error) {
+                 console.error("Error during PNG export:", error);
+                 alert("Failed to export PNG. Check console.");
+            }
 
-            if (showGridLines && originalStrokes.length > 0) { // Linien wiederherstellen
+            // Linien wiederherstellen
+            if (strokesChanged) {
                 originalStrokes.forEach(item => {
                    if(item.path) {
-                       item.path.strokeColor = item.strokeColor; // Kein Klonen nötig, da wir Originalobjekte wiederherstellen
+                       item.path.strokeColor = item.strokeColor;
                        item.path.strokeWidth = item.strokeWidth;
                    }
                 });
                  paperScope.view.draw();
-                 console.log("Restored grid lines after export.");
             }
         });
 
+        // Input + OK für Farbe
         btnColorInputOk.addEventListener('click', () => {
-            if (!paperScope) return;
+            if (!paperScope || !currColor || !colorPickerInstance) return;
             const hexValue = inputColorHex.value.trim();
             try {
-                // Striktere Prüfung auf #rrggbb oder #rgb
                 if (/^#([0-9A-F]{3}){1,2}$/i.test(hexValue)) {
                    const newColor = new paperScope.Color(hexValue);
-                   colorPicker.color.hexString = newColor.toHex(); // Synchronisiere Picker
-                   currColor = newColor; // Setze globale Farbe
+                   colorPickerInstance.color.hexString = newColor.toHex(); // Picker aktualisieren
+                   currColor = newColor; // Globale Farbe aktualisieren
                    console.log("Color set from input:", currColor.toCSS());
                 } else {
                     throw new Error("Invalid hex format. Use #rrggbb or #rgb.");
@@ -745,11 +795,9 @@
             } catch (e) {
                 console.error("Invalid color input:", hexValue, e);
                 alert(e.message || "Invalid color format.");
-                // Setze Input zurück auf aktuelle Farbe
-                inputColorHex.value = currColor.toHex();
+                inputColorHex.value = currColor.toHex(); // Auf alten Wert zurücksetzen
             }
         });
-
         inputColorHex.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -757,13 +805,22 @@
             }
         });
 
-        // --- Initial Setup ---
-        inputGridSize.value = gridSize;
-        inputCellSize.value = cellSize;
-        setActiveTool('draw');
-        createGrid(); // Erstelle das initiale Grid beim Laden
-        console.log("Pixel Matrix Editor Initialized.");
-    });
+        // Tool Buttons
+        toolDrawBtn.addEventListener('click', () => setActiveTool('draw'));
+        toolFillBtn.addEventListener('click', () => setActiveTool('fill'));
+        toolEyedropperBtn.addEventListener('click', () => setActiveTool('eyedropper'));
+
+        // --- Initialer Start ---
+        try {
+            setActiveTool('draw'); // Standardwerkzeug setzen
+            createGrid(); // Das erste Grid erstellen
+            console.log("Pixel Matrix Editor Initialized Successfully.");
+        } catch (error) {
+            console.error("Error during initial setup:", error);
+            alert("Failed to initialize the editor. Please check the console.");
+        }
+
+    }); // Ende DOMContentLoaded
   </script>
 </body>
 </html>

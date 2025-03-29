@@ -367,33 +367,61 @@
                 console.log("paperScope setup complete on canvas.");
 
                 // Farben initialisieren
-                try { // Innerer try-catch Block für Farben
+                                // Farben initialisieren mit erweitertem Debugging
+                try {
+                    console.log("Attempting to initialize colors...");
+                    console.log("paperScope object:", paperScope);
+                    console.log("Is paperScope.Color a function?", typeof paperScope.Color);
+
+                    if (typeof paperScope.Color !== 'function') {
+                        throw new Error("paperScope.Color is not available or not a function!");
+                    }
+
+                    console.log("Attempting to create whiteColor...");
                     whiteColor = new paperScope.Color('white');
-                    blackColor = new paperScope.Color('black');
-                    if (!whiteColor || typeof whiteColor.toHex !== 'function') { // Prüfe toHex auf whiteColor
+                     console.log("whiteColor created:", whiteColor, "Type:", typeof whiteColor);
+                    if (!whiteColor || typeof whiteColor.toHex !== 'function') {
+                        console.error("Failed to create a valid whiteColor object. Value:", whiteColor);
                         throw new Error("Failed to init whiteColor as a valid paper.Color object.");
                     }
                     console.log("Initialized whiteColor OK:", whiteColor.toString());
 
-                    // === Workaround: Initialisiere currColor direkt ===
+                    console.log("Attempting to create blackColor...");
+                    blackColor = new paperScope.Color('black');
+                    console.log("blackColor created:", blackColor, "Type:", typeof blackColor);
+                     if (!blackColor || typeof blackColor.toHex !== 'function') {
+                        console.warn("Failed to create a valid blackColor object. Value:", blackColor);
+                        // Optional: Hier auch einen Error werfen, wenn Schwarz kritisch ist
+                    } else {
+                        console.log("Initialized blackColor OK:", blackColor.toString());
+                    }
+
+
+                    console.log("Attempting to create currColor with 'white'...");
                     currColor = new paperScope.Color('white');
-                    // === Ende Workaround ===
+                    console.log("currColor created:", currColor, "Type:", typeof currColor);
 
                     // Prüfe das neu erstellte currColor
                     if (!currColor || typeof currColor.toHex !== 'function') {
-                        console.error("currColor after direct initialization is invalid:", currColor);
-                        // Wenn das *immer noch* fehlschlägt, liegt das Problem tiefer bei paperScope.Color('white')
-                        throw new Error(`Failed to init currColor directly. typeof currColor: ${typeof currColor}`);
+                        console.error("currColor after direct initialization is invalid. Value:", currColor);
+                        // Der Fehler tritt wahrscheinlich hier auf, wenn currColor kein gültiges Objekt ist.
+                        throw new Error(`Failed to init currColor directly. typeof currColor: ${typeof currColor}, value: ${currColor}`);
                     }
                     console.log("Initialized currColor OK (directly):", currColor.toString());
 
-                    // UI synchronisieren
-                    colorPickerInstance.color.hexString = currColor.toHex();
-                    inputColorHex.value = currColor.toHex();
-                    console.log("Synced UI with initial currColor.");
+                    // UI synchronisieren (nur wenn iro.js Instanz existiert)
+                    if (colorPickerInstance) {
+                         console.log("Attempting to sync UI color...");
+                         colorPickerInstance.color.hexString = currColor.toHex();
+                         inputColorHex.value = currColor.toHex();
+                         console.log("Synced UI with initial currColor.");
+                    } else {
+                         console.warn("colorPickerInstance not found for UI sync during color init.");
+                    }
 
                 } catch (colorError) {
-                    console.error("FATAL ERROR during color initialization:", colorError);
+                    console.error("FATAL ERROR during color initialization:", colorError.message, colorError.stack); // Logge mehr Details
+                    // Den Fehler weiterwerfen, damit die äußere Routine ihn fängt
                     throw colorError;
                 }
 
